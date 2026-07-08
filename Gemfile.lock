@@ -1,0 +1,21 @@
+PATH
+  remote: .
+  specs:
+    invoq (0.2.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    minitest (5.11.3)
+    rake (12.3.3)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  invoq!
+  minitest (~> 5.0)
+  rake (>= 10.0, < 14.0)
+
+BUNDLED WITH
+   1.17.2
