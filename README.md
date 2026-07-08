@@ -20,6 +20,29 @@ Or add it to a Gemfile:
 gem "invoq"
 ```
 
+Requires Ruby 2.6 or newer.
+
+## Get your keys
+
+1. Sign in to the [invoq dashboard](https://app.invoq.money) and create a
+   project.
+2. On the **API keys** page, create a secret key. Test keys start with
+   `sk_test_`, live keys with `sk_live_`. The key mode determines whether
+   invoices are test or live.
+3. In your project's **webhooks** settings, save your webhook URL. The webhook
+   secret (`whsec_...`) for that mode is shown once, when you first enable the
+   webhook. Store it right away. Webhook URLs must be public HTTPS URLs.
+
+Add both to your server environment:
+
+```sh
+INVOQ_SECRET_KEY=sk_test_...
+INVOQ_WEBHOOK_SECRET=whsec_...
+```
+
+Start with test keys. Switch to the live key and live webhook secret when you
+go to production.
+
 ## Create a client
 
 ```ruby
@@ -48,7 +71,7 @@ invoq = Invoq.new(
 hash, username, or password. The SDK appends `/v1/...` resource paths.
 
 Requests time out after 10 seconds by default. Pass `timeout_ms` to change the
-timeout.
+timeout. `timeout_ms` must be a positive integer in milliseconds.
 
 ## Invoices
 
@@ -62,17 +85,28 @@ invoice = invoq.invoices.create(
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
 )
+
+invoice_id = invoice.fetch("id")
+checkout_url = "https://pay.invoq.money/#{invoice_id}"
 ```
 
 Notes:
 
 - Use a server-side amount. Do not trust client-supplied amounts.
-- `amount` is a decimal USD string from `"0.01"` to `"999.99"` with up to 2 decimal places.
+- `amount` is a decimal USD string from `"0.01"` to `"999.99"` with up
+  to 2 decimal places, such as `"129"` or `"129.99"`.
 - `currency` is optional and defaults to `"USD"`.
-- Use `reference_id` to map `invoice.paid` webhooks back to your order.
-  Creating again with the same `reference_id` and invoice terms returns the
-  existing invoice; different terms fail with a `409 reference_id_conflict` API
-  error.
+- Use a stable, non-empty `reference_id` to map `invoice.paid` webhooks back to
+  your order. Creating again with the same `reference_id` and invoice terms
+  returns the existing invoice; different terms fail with a
+  `409 reference_id_conflict` API error.
+- If you fulfill by invoice ID instead of `reference_id`, store `invoice_id`
+  with your order when you create the invoice.
+- Omit `return_url` to use the project's default return URL. Pass `nil` to send
+  JSON `null` and create the invoice without a return URL. On `reference_id`
+  retries, pass `return_url` explicitly when you need to assert a specific
+  value.
+- `description` and `reference_id` must be strings when present.
 
 Get an invoice:
 
@@ -96,12 +130,33 @@ paid_invoice = invoq.invoices.create_test_payment(
 )
 ```
 
+Test invoices cannot receive real funds. Simulate payments from your server
+instead.
+
 `create_test_payment` only works for invoices created with a `sk_test_` key.
 Partial amounts are allowed and produce `partially_paid`; when payments reach
 the invoice amount, invoq sends a signed `invoice.paid` webhook to your test
 webhook URL.
 
+`reference_id` is optional for test payments. Omit it when unset; do not pass
+`nil`.
+
+To receive webhooks on your machine, expose your local server with an HTTPS
+tunnel such as ngrok or cloudflared and save the tunnel URL as your test webhook
+URL in the dashboard. The dashboard can also send a signed `webhook.ping` to
+check connectivity.
+
 Each invoice method returns the response `data` object directly as a Ruby hash.
+
+## Hosted checkout page
+
+Every invoice also has a hosted checkout page at:
+
+```txt
+https://pay.invoq.money/<invoice id>
+```
+
+Share the link or redirect to it when an in-page checkout modal is not a fit.
 
 ## Inputs and responses
 
@@ -123,19 +178,41 @@ the same 18-decimal scale as `amount_paid`.
 Pass the raw request body to `verify_webhook`. Do not parse JSON and encode it
 again before verification.
 
+This Rack example returns `[status, headers, body]`. In Rails, use
+`request.raw_post` and `request.get_header("HTTP_INVOQ_SIGNATURE")`; in Sinatra
+or another Ruby framework, use the framework's raw request body and exposed
+`invoq-signature` or `HTTP_INVOQ_SIGNATURE` header.
+
 ```ruby
-raw_body = request.body.read
-event = Invoq.verify_webhook(
-  raw_body,
-  { "invoq-signature" => request.get_header("HTTP_INVOQ_SIGNATURE") },
-  ENV.fetch("INVOQ_WEBHOOK_SECRET")
-)
+def handle_invoq_webhook(env)
+  raw_body = env.fetch("rack.input").read
 
-if Invoq.invoice_paid?(event)
-  order_id = event.fetch("data").fetch("invoice").fetch("reference_id")
-  raise "Missing reference_id" if order_id.nil?
+  begin
+    event = Invoq.verify_webhook(
+      raw_body,
+      { "invoq-signature" => env["HTTP_INVOQ_SIGNATURE"] },
+      ENV.fetch("INVOQ_WEBHOOK_SECRET")
+    )
+  rescue Invoq::SignatureVerificationError
+    return [
+      400,
+      { "content-type" => "application/json" },
+      ['{"error":"invalid signature"}']
+    ]
+  end
 
-  # Fulfill the order for order_id.
+  if Invoq.invoice_paid?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # Fulfill the order for fulfillment_key idempotently.
+  end
+
+  [
+    200,
+    { "content-type" => "application/json" },
+    ['{"received":true}']
+  ]
 end
 ```
 
@@ -143,19 +220,35 @@ Use `invoice.paid` webhooks to fulfill orders on your server. Browser checkout
 results are only for updating the customer experience; do not fulfill orders
 from browser results.
 
+When `Invoq.invoice_paid?(event)` is true, the invoice is ready for automatic
+fulfillment; use the invoice `reference_id` or a stored invoice `id` to find
+and fulfill your order. A `review_required` invoice does not emit an
+`invoice.paid` webhook yet. If checkout reports `review_required`, show a
+pending-review state and wait for a later `invoice.paid` webhook after review
+is approved.
+
 Important:
 
 - Pass the exact raw request body string received by your Ruby framework.
 - Pass the `invoq-signature` header.
-- Use your webhook secret (`whsec_...`), not your invoq API secret key.
-- Make fulfillment idempotent. Failed webhook deliveries are retried, so the
-  same event can arrive more than once.
-- Respond with a 2xx quickly. Transient failures are retried.
+- `verify_webhook` does not require `Invoq.new(...)` or your invoq API secret
+  key.
+- Use your webhook secret (`whsec_...`), not `INVOQ_SECRET_KEY`.
+- Make fulfillment idempotent. Retried webhook deliveries can send the same
+  event more than once.
+- Respond with a 2xx quickly. Any other status counts as a failed delivery.
+  Transient failures such as timeouts, `429`, and `5xx` responses are retried;
+  other `4xx` responses are not.
 
 `Invoq.invoice_paid?` accepts fulfillable `invoice.paid` events whose invoice
 status is `paid`, `settling`, or `settled`; it rejects `review_required`.
 
-Webhook verification failures raise `Invoq::SignatureVerificationError`.
+Webhook verification failures raise `Invoq::SignatureVerificationError`. The
+SDK allows a 5-minute timestamp tolerance. The signature header is:
+
+```txt
+invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
+```
 
 ## Errors
 
@@ -196,3 +289,7 @@ invalid_payload
 ```sh
 bundle exec rake test
 ```
+
+## License
+
+Licensed under the MIT license.
