@@ -6,6 +6,21 @@ invoq server APIs and verifies signed webhooks.
 Use this gem only on your server. It handles secret keys and should not be
 bundled into browser code.
 
+## Server SDKs
+
+Create invoices and verify webhooks from your backend in any of these languages — same REST API, same webhook signature. This repository is the Ruby SDK.
+
+| Language | Repository |
+| --- | --- |
+| Node.js | [github.com/invoqmoney/sdk-js](https://github.com/invoqmoney/sdk-js) (`@invoq/server`) |
+| Python | [github.com/invoqmoney/sdk-python](https://github.com/invoqmoney/sdk-python) |
+| PHP | [github.com/invoqmoney/sdk-php](https://github.com/invoqmoney/sdk-php) |
+| Go | [github.com/invoqmoney/sdk-go](https://github.com/invoqmoney/sdk-go) |
+| Rust | [github.com/invoqmoney/sdk-rust](https://github.com/invoqmoney/sdk-rust) |
+| Ruby | **this repo** |
+
+The browser side is the same for every backend: **`@invoq/checkout`** (JavaScript, in [github.com/invoqmoney/sdk-js](https://github.com/invoqmoney/sdk-js)) opens the in-page checkout modal for any frontend.
+
 ## Installation
 
 Install the gem:
