@@ -115,7 +115,7 @@ Récupérez une facture :
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` renvoie la forme de facture publique utilisée par la page de checkout hébergée. Elle inclut des champs tels que `amount_paid`, `amount_due`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at` et `direct_onchain_rails`, mais n’inclut pas `reference_id`. Utilisez la réponse de création ou le webhook `invoice.paid` quand vous avez besoin de votre `reference_id` marchand.
+`invoices.get` renvoie la forme de facture publique utilisée par la page de checkout hébergée. Elle inclut des champs tels que `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` et `direct_onchain_rails`, mais n’inclut pas `reference_id`. Utilisez la réponse de création ou le webhook `invoice.paid` quand vous avez besoin de votre `reference_id` marchand.
 
 Créez un paiement de test :
 
@@ -153,7 +153,7 @@ Le SDK vérifie que les valeurs `amount` et les arguments `invoice_id` sont des 
 
 Laissez les champs optionnels non définis en dehors du hash de requête. Quand vous incluez `description` ou `reference_id`, passez une chaîne. `return_url` peut être une chaîne ou `nil`.
 
-Les montants des réponses sont normalisés à 4 décimales : créez avec `"129"` et la facture renvoie `amount: "129.0000"`. Comparez les montants numériquement, pas comme des chaînes. `amount_due` est dérivé sous la forme `max(amount - amount_paid, 0)` et utilise la même échelle à 18 décimales que `amount_paid`.
+Les montants des réponses sont normalisés à 4 décimales : créez avec `"129"` et la facture renvoie `amount: "129.0000"`. Comparez les montants numériquement, pas comme des chaînes. `amount_due` est dérivé sous la forme `max(amount - amount_paid, 0)` et utilise la même échelle à 18 décimales que `amount_paid` ; `amount_overpaid` en est le miroir, `max(amount_paid - amount, 0)`, si bien que vous n’avez jamais à soustraire d’argent vous-même. `monitoring_status` vaut `"active"` ou `"ended"` — une fois à `"ended"`, l’adresse de dépôt n’est plus surveillée — et `transfers` est le journal confirmé des encaissements on-chain (chaque entrée a `tx_hash`, `amount` et `explorer_tx_url`). Les deux valent `nil` / `[]` pour les factures de test.
 
 ## Webhooks
 

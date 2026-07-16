@@ -115,7 +115,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` จะคืนรูปแบบใบแจ้งหนี้สาธารณะที่หน้า checkout แบบโฮสต์ใช้ ซึ่งมีฟิลด์อย่าง `amount_paid`, `amount_due`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at` และ `direct_onchain_rails` แต่ไม่มี `reference_id` ถ้าต้องใช้ `reference_id` ฝั่ง merchant ให้ใช้ response ตอนสร้างใบแจ้งหนี้หรือ webhook `invoice.paid`
+`invoices.get` จะคืนรูปแบบใบแจ้งหนี้สาธารณะที่หน้า checkout แบบโฮสต์ใช้ ซึ่งมีฟิลด์อย่าง `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` และ `direct_onchain_rails` แต่ไม่มี `reference_id` ถ้าต้องใช้ `reference_id` ฝั่ง merchant ให้ใช้ response ตอนสร้างใบแจ้งหนี้หรือ webhook `invoice.paid`
 
 สร้างการชำระเงินทดสอบ:
 
@@ -153,7 +153,7 @@ SDK จะตรวจสอบว่าค่า `amount` และอาร์
 
 ฟิลด์ที่ไม่บังคับและไม่ได้กำหนดค่า ให้ละไว้ไม่ต้องใส่ใน request hash เมื่อคุณใส่ `description` หรือ `reference_id` ให้ส่งเป็นสตริง ส่วน `return_url` เป็นได้ทั้งสตริงหรือ `nil`
 
-ยอดเงินในการตอบกลับถูกปรับให้เป็นทศนิยม 4 ตำแหน่งเสมอ: สร้างด้วย `"129"` ใบแจ้งหนี้จะตอบกลับ `amount: "129.0000"` เวลาจะเทียบยอดเงินให้เทียบเป็นตัวเลข อย่าเทียบเป็นสตริง `amount_due` คำนวณจาก `max(amount - amount_paid, 0)` และใช้สเกลทศนิยม 18 ตำแหน่งเหมือน `amount_paid`
+ยอดเงินในการตอบกลับถูกปรับให้เป็นทศนิยม 4 ตำแหน่งเสมอ: สร้างด้วย `"129"` ใบแจ้งหนี้จะตอบกลับ `amount: "129.0000"` เวลาจะเทียบยอดเงินให้เทียบเป็นตัวเลข อย่าเทียบเป็นสตริง `amount_due` คำนวณจาก `max(amount - amount_paid, 0)` และใช้สเกลทศนิยม 18 ตำแหน่งเหมือน `amount_paid` ขณะที่ `amount_overpaid` เป็นภาพสะท้อนของมัน คือ `max(amount_paid - amount, 0)` คุณจึงไม่ต้องลบเงินเอง `monitoring_status` มีค่าเป็น `"active"` หรือ `"ended"` — พอเป็น `"ended"` แล้ว ที่อยู่รับเงินจะไม่ถูกเฝ้าดูอีกต่อไป — ส่วน `transfers` คือรายการรับเงินบนเชนที่ยืนยันแล้ว (แต่ละรายการมี `tx_hash`, `amount` และ `explorer_tx_url`) ทั้งคู่จะเป็น `nil` / `[]` สำหรับใบแจ้งหนี้ทดสอบ
 
 ## Webhooks
 

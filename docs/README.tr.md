@@ -115,7 +115,7 @@ Bir faturayı getirin:
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get`, barındırılan ödeme sayfasının kullandığı herkese açık fatura şeklini döndürür. `amount_paid`, `amount_due`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at` ve `direct_onchain_rails` gibi alanları içerir, ancak `reference_id` içermez. Merchant `reference_id` değeriniz gerektiğinde oluşturma yanıtını veya `invoice.paid` webhook'unu kullanın.
+`invoices.get`, barındırılan ödeme sayfasının kullandığı herkese açık fatura şeklini döndürür. `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` ve `direct_onchain_rails` gibi alanları içerir, ancak `reference_id` içermez. Merchant `reference_id` değeriniz gerektiğinde oluşturma yanıtını veya `invoice.paid` webhook'unu kullanın.
 
 Test ödemesi oluşturun:
 
@@ -153,7 +153,7 @@ SDK, istekleri göndermeden önce `amount` değerlerinin ve `invoice_id` argüma
 
 Ayarlanmamış isteğe bağlı alanları istek hash'inin dışında bırakın. `description` veya `reference_id` eklediğinizde bir dize geçin. `return_url` bir dize ya da `nil` olabilir.
 
-Yanıtlardaki tutarlar 4 ondalık basamağa normalize edilir: `"129"` ile oluşturun, fatura `amount: "129.0000"` döndürür. Tutarları dize olarak değil, sayısal olarak karşılaştırın. `amount_due`, `max(amount - amount_paid, 0)` olarak türetilir ve `amount_paid` ile aynı 18 ondalık basamak ölçeğini kullanır.
+Yanıtlardaki tutarlar 4 ondalık basamağa normalize edilir: `"129"` ile oluşturun, fatura `amount: "129.0000"` döndürür. Tutarları dize olarak değil, sayısal olarak karşılaştırın. `amount_due`, `max(amount - amount_paid, 0)` olarak türetilir ve `amount_paid` ile aynı 18 ondalık basamak ölçeğini kullanır; `amount_overpaid` ise onun aynasıdır, `max(amount_paid - amount, 0)`, yani parayı kendiniz çıkarmanız hiç gerekmez. `monitoring_status`, `"active"` ya da `"ended"` olur — `"ended"` olduğunda yatırma adresi artık izlenmez — ve `transfers`, onaylanmış zincir üstü tahsilat kaydıdır (her girdide `tx_hash`, `amount` ve `explorer_tx_url` bulunur). İkisi de test faturaları için `nil` / `[]` olur.
 
 ## Webhook'lar
 

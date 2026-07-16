@@ -115,7 +115,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` 回傳託管結帳頁使用的公開帳單結構。它包含 `amount_paid`、`amount_due`、`payment_status`、`project`、`deposit_address`、`monitoring_ends_at` 和 `direct_onchain_rails` 等欄位，但不包含 `reference_id`。如果需要你的商家端 `reference_id`，請使用建立帳單的回應或 `invoice.paid` webhook。
+`invoices.get` 回傳託管結帳頁使用的公開帳單結構。它包含 `amount_paid`、`amount_due`、`amount_overpaid`、`payment_status`、`project`、`deposit_address`、`monitoring_ends_at`、`monitoring_status`、`transfers` 和 `direct_onchain_rails` 等欄位，但不包含 `reference_id`。如果需要你的商家端 `reference_id`，請使用建立帳單的回應或 `invoice.paid` webhook。
 
 建立一筆測試付款：
 
@@ -153,7 +153,7 @@ https://pay.invoq.money/<invoice id>
 
 沒有要設定的選填欄位，就別放進請求的 hash 裡。當你要帶入 `description` 或 `reference_id` 時，請傳入字串。`return_url` 可以是字串或 `nil`。
 
-回應裡的金額一律格式化為 4 位小數：用 `"129"` 建立，帳單會回傳 `amount: "129.0000"`。比較金額請按數值比，不要按字串比。`amount_due` 依 `max(amount - amount_paid, 0)` 衍生，使用和 `amount_paid` 相同的 18 位小數 scale。
+回應裡的金額一律格式化為 4 位小數：用 `"129"` 建立，帳單會回傳 `amount: "129.0000"`。比較金額請按數值比，不要按字串比。`amount_due` 依 `max(amount - amount_paid, 0)` 衍生，使用和 `amount_paid` 相同的 18 位小數 scale；`amount_overpaid` 與它互為鏡像，即 `max(amount_paid - amount, 0)`，所以你不必自己做減法。`monitoring_status` 取值 `"active"` 或 `"ended"`——一旦變為 `"ended"`，收款位址就不再被監控——而 `transfers` 是已確認的鏈上收款紀錄（每一項都含 `tx_hash`、`amount` 和 `explorer_tx_url`）。測試帳單裡兩者分別為 `nil` / `[]`。
 
 ## Webhook
 
