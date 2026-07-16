@@ -132,10 +132,11 @@ invoice = invoq.invoices.get("inv_123")
 ```
 
 `invoices.get` returns the public invoice shape used by hosted checkout. It
-includes fields such as `amount_paid`, `amount_due`, `payment_status`,
-`project`, `deposit_address`, `monitoring_ends_at`, and `direct_onchain_rails`,
-but does not include `reference_id`. Use the create response or
-`invoice.paid` webhook when you need your merchant `reference_id`.
+includes fields such as `amount_paid`, `amount_due`, `amount_overpaid`,
+`payment_status`, `project`, `deposit_address`, `monitoring_ends_at`,
+`monitoring_status`, `transfers`, and `direct_onchain_rails`, but does not
+include `reference_id`. Use the create response or `invoice.paid` webhook when
+you need your merchant `reference_id`.
 
 Create a test payment:
 
@@ -188,7 +189,12 @@ Leave unset optional fields out of the request hash. When you include
 Amounts in responses are normalized to 4 decimal places: create with `"129"`
 and the invoice returns `amount: "129.0000"`. Compare amounts numerically, not
 as strings. `amount_due` is derived as `max(amount - amount_paid, 0)` and uses
-the same 18-decimal scale as `amount_paid`.
+the same 18-decimal scale as `amount_paid`; `amount_overpaid` is its mirror,
+`max(amount_paid - amount, 0)`, so you never subtract money yourself.
+`monitoring_status` is `"active"` or `"ended"` — once it is `"ended"`, the
+deposit address is no longer watched — and `transfers` is the confirmed
+on-chain receipt trail (each entry has `tx_hash`, `amount`, and
+`explorer_tx_url`). Both are `nil` / `[]` for test invoices.
 
 ## Webhooks
 

@@ -115,7 +115,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` 返回托管收银页使用的公开账单结构。它包含 `amount_paid`、`amount_due`、`payment_status`、`project`、`deposit_address`、`monitoring_ends_at` 和 `direct_onchain_rails` 等字段，但不包含 `reference_id`。如果需要商户侧的 `reference_id`，请使用创建账单的响应或 `invoice.paid` webhook。
+`invoices.get` 返回托管收银页使用的公开账单结构。它包含 `amount_paid`、`amount_due`、`amount_overpaid`、`payment_status`、`project`、`deposit_address`、`monitoring_ends_at`、`monitoring_status`、`transfers` 和 `direct_onchain_rails` 等字段，但不包含 `reference_id`。如果需要商户侧的 `reference_id`，请使用创建账单的响应或 `invoice.paid` webhook。
 
 创建一笔测试付款：
 
@@ -153,7 +153,7 @@ SDK 在发送请求前，会检查 `amount` 值和 `invoice_id` 参数是不是�
 
 不需要的可选字段就别放进请求的哈希里。如果要带上 `description` 或 `reference_id`，请传字符串。`return_url` 可以是字符串或 `nil`。
 
-响应里的金额统一格式化为 4 位小数：用 `"129"` 创建，账单返回 `amount: "129.0000"`。比较金额请按数值比较，不要按字符串比较。`amount_due` 按 `max(amount - amount_paid, 0)` 派生，使用和 `amount_paid` 相同的 18 位小数 scale。
+响应里的金额统一格式化为 4 位小数：用 `"129"` 创建，账单返回 `amount: "129.0000"`。比较金额请按数值比较，不要按字符串比较。`amount_due` 按 `max(amount - amount_paid, 0)` 派生，使用和 `amount_paid` 相同的 18 位小数 scale；`amount_overpaid` 与它互为镜像，即 `max(amount_paid - amount, 0)`，所以你不必自己做减法。`monitoring_status` 取值 `"active"` 或 `"ended"`——一旦变为 `"ended"`，收款地址就不再被监控——而 `transfers` 是已确认的链上收款记录（每一项都含 `tx_hash`、`amount` 和 `explorer_tx_url`）。测试账单里两者分别为 `nil` / `[]`。
 
 ## Webhook
 

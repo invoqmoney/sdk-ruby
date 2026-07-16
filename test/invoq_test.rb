@@ -19,7 +19,9 @@ class InvoqTest < Minitest::Test
     "deposit_address" => nil,
     "status" => "unpaid",
     "amount_due" => "149.000000000000000000",
+    "amount_overpaid" => "0.000000000000000000",
     "monitoring_ends_at" => nil,
+    "monitoring_status" => nil,
     "direct_onchain_rails" => []
   }.freeze
 
@@ -38,10 +40,13 @@ class InvoqTest < Minitest::Test
     "deposit_address" => nil,
     "status" => "unpaid",
     "amount_due" => "149.000000000000000000",
+    "amount_overpaid" => "0.000000000000000000",
     "monitoring_ends_at" => nil,
+    "monitoring_status" => nil,
     "direct_onchain_rails" => [],
     "amount_paid" => "0.000000000000000000",
-    "payment_status" => "unpaid"
+    "payment_status" => "unpaid",
+    "transfers" => []
   }.freeze
 
   FakeResponse = Struct.new(:code, :body)
@@ -91,6 +96,9 @@ class InvoqTest < Minitest::Test
         )
 
         assert_equal INVOICE, result
+        assert_equal "0.000000000000000000", result.fetch("amount_overpaid")
+        assert_nil result.fetch("monitoring_status")
+        refute_includes result, "transfers"
       end
     end
 
@@ -179,6 +187,9 @@ class InvoqTest < Minitest::Test
       assert_equal PUBLIC_INVOICE, result
       refute_includes result, "reference_id"
       assert_equal "Test project", result.fetch("project").fetch("name")
+      assert_equal [], result.fetch("transfers")
+      assert_equal "0.000000000000000000", result.fetch("amount_overpaid")
+      assert_nil result.fetch("monitoring_status")
     end
 
     request = calls.fetch(0)
@@ -235,6 +246,8 @@ class InvoqTest < Minitest::Test
       )
 
       assert_equal paid_invoice, result
+      assert_equal "0.000000000000000000", result.fetch("amount_overpaid")
+      refute_includes result, "transfers"
     end
 
     request = calls.fetch(0)

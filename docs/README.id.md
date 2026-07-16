@@ -115,7 +115,7 @@ Ambil invoice:
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` mengembalikan bentuk invoice publik yang dipakai halaman checkout yang dihosting. Ini mencakup field seperti `amount_paid`, `amount_due`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, dan `direct_onchain_rails`, tetapi tidak menyertakan `reference_id`. Gunakan respons pembuatan atau webhook `invoice.paid` saat Anda membutuhkan `reference_id` merchant Anda.
+`invoices.get` mengembalikan bentuk invoice publik yang dipakai halaman checkout yang dihosting. Ini mencakup field seperti `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers`, dan `direct_onchain_rails`, tetapi tidak menyertakan `reference_id`. Gunakan respons pembuatan atau webhook `invoice.paid` saat Anda membutuhkan `reference_id` merchant Anda.
 
 Buat pembayaran uji coba:
 
@@ -153,7 +153,7 @@ SDK memeriksa bahwa nilai `amount` dan argumen `invoice_id` berupa string yang t
 
 Jangan masukkan field opsional yang tidak diisi ke dalam hash request. Saat Anda menyertakan `description` atau `reference_id`, berikan sebuah string. `return_url` bisa berupa string atau `nil`.
 
-Jumlah di respons dinormalkan ke 4 angka desimal: buat dengan `"129"` dan invoice mengembalikan `amount: "129.0000"`. Bandingkan jumlah secara numerik, bukan sebagai string. `amount_due` diturunkan sebagai `max(amount - amount_paid, 0)` dan memakai skala 18 desimal yang sama dengan `amount_paid`.
+Jumlah di respons dinormalkan ke 4 angka desimal: buat dengan `"129"` dan invoice mengembalikan `amount: "129.0000"`. Bandingkan jumlah secara numerik, bukan sebagai string. `amount_due` diturunkan sebagai `max(amount - amount_paid, 0)` dan memakai skala 18 desimal yang sama dengan `amount_paid`; `amount_overpaid` adalah kebalikannya, `max(amount_paid - amount, 0)`, jadi Anda tidak perlu mengurangkannya sendiri. `monitoring_status` bernilai `"active"` atau `"ended"` — begitu bernilai `"ended"`, alamat deposit tidak lagi dipantau — dan `transfers` adalah jejak penerimaan on-chain yang sudah terkonfirmasi (tiap entri punya `tx_hash`, `amount`, dan `explorer_tx_url`). Keduanya bernilai `nil` / `[]` untuk invoice uji coba.
 
 ## Webhook
 
