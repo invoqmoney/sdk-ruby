@@ -110,7 +110,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Notas:
 
 - Use um valor definido no servidor. Não confie em valores vindos do cliente.
-- `amount` é uma string decimal em USD de `"0.01"` a `"999.99"`, com até 2
+- `amount` é uma string decimal em USD de `"0.01"` a `"1000000.00"`, com até 2
   casas decimais, como `"129"` ou `"129.99"`.
 - `currency` é opcional e assume `"USD"` por padrão.
 - Use um `reference_id` estável e não vazio para ligar os webhooks

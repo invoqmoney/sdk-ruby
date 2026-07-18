@@ -102,7 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 說明：
 
 - 金額要由伺服器端決定，不要相信用戶端傳來的金額。
-- `amount` 是 `"0.01"` 到 `"999.99"` 之間的十進位美元字串，最多兩位小數，例如 `"129"` 或 `"129.99"`。
+- `amount` 是 `"0.01"` 到 `"1000000.00"` 之間的十進位美元字串，最多兩位小數，例如 `"129"` 或 `"129.99"`。
 - `currency` 是選填，預設為 `"USD"`。
 - 用一個穩定、非空的 `reference_id`，把 `invoice.paid` webhook 對應回你的訂單。用相同的 `reference_id` 和相同的帳單條件再建立一次，回傳的是既有帳單；條件不同則會回 `409 reference_id_conflict` API 錯誤。
 - 如果你是用帳單 ID 而不是 `reference_id` 來履約，建立帳單時就把 `invoice_id` 和你的訂單一起存起來。

@@ -102,7 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Notlar:
 
 - Tutarı sunucu tarafında belirleyin. İstemciden gelen tutarlara güvenmeyin.
-- `amount`, `"0.01"` ile `"999.99"` arasında, en fazla 2 ondalık basamaklı, USD cinsinden ondalık bir dizedir — örneğin `"129"` veya `"129.99"`.
+- `amount`, `"0.01"` ile `"1000000.00"` arasında, en fazla 2 ondalık basamaklı, USD cinsinden ondalık bir dizedir — örneğin `"129"` veya `"129.99"`.
 - `currency` isteğe bağlıdır ve varsayılan olarak `"USD"` kullanılır.
 - `invoice.paid` webhook'larını siparişinize geri bağlamak için sabit ve boş olmayan bir `reference_id` kullanın. Aynı `reference_id` ve aynı fatura koşullarıyla tekrar oluşturmak mevcut faturayı döndürür; farklı koşullar ise `409 reference_id_conflict` API hatasıyla başarısız olur.
 - Siparişleri `reference_id` yerine fatura ID'sine göre işliyorsanız, faturayı oluşturduğunuzda `invoice_id` değerini siparişinizle birlikte saklayın.

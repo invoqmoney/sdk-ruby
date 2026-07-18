@@ -102,7 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Lưu ý:
 
 - Số tiền phải do máy chủ quyết định. Đừng tin số tiền phía client gửi lên.
-- `amount` là chuỗi thập phân USD từ `"0.01"` đến `"999.99"`, tối đa 2 chữ số lẻ, ví dụ `"129"` hoặc `"129.99"`.
+- `amount` là chuỗi thập phân USD từ `"0.01"` đến `"1000000.00"`, tối đa 2 chữ số lẻ, ví dụ `"129"` hoặc `"129.99"`.
 - `currency` là tùy chọn và mặc định là `"USD"`.
 - Dùng một `reference_id` ổn định, không rỗng để nối các webhook `invoice.paid` về đúng đơn hàng của bạn. Tạo lại với cùng `reference_id` và cùng nội dung hóa đơn sẽ trả về hóa đơn đã có; nếu nội dung khác nhau, API sẽ báo lỗi `409 reference_id_conflict`.
 - Nếu bạn xử lý đơn hàng theo invoice ID thay vì `reference_id`, hãy lưu `invoice_id` cùng đơn hàng khi tạo hóa đơn.

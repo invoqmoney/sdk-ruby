@@ -102,7 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Catatan:
 
 - Gunakan jumlah dari sisi server. Jangan percaya jumlah yang dikirim klien.
-- `amount` adalah string desimal USD dari `"0.01"` sampai `"999.99"` dengan maksimal 2 angka di belakang koma, misalnya `"129"` atau `"129.99"`.
+- `amount` adalah string desimal USD dari `"0.01"` sampai `"1000000.00"` dengan maksimal 2 angka di belakang koma, misalnya `"129"` atau `"129.99"`.
 - `currency` bersifat opsional dan bawaannya `"USD"`.
 - Gunakan `reference_id` yang stabil dan tidak kosong untuk memetakan webhook `invoice.paid` kembali ke pesanan Anda. Membuat lagi dengan `reference_id` dan ketentuan invoice yang sama mengembalikan invoice yang sudah ada; ketentuan yang berbeda gagal dengan error API `409 reference_id_conflict`.
 - Jika Anda memproses pesanan berdasarkan ID invoice alih-alih `reference_id`, simpan `invoice_id` bersama pesanan Anda saat membuat invoice.

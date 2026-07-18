@@ -102,7 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Notes :
 
 - Utilisez un montant défini côté serveur. Ne faites pas confiance aux montants envoyés par le client.
-- `amount` est une chaîne décimale en USD de `"0.01"` à `"999.99"`, avec au plus 2 décimales, comme `"129"` ou `"129.99"`.
+- `amount` est une chaîne décimale en USD de `"0.01"` à `"1000000.00"`, avec au plus 2 décimales, comme `"129"` ou `"129.99"`.
 - `currency` est optionnel et vaut `"USD"` par défaut.
 - Utilisez un `reference_id` stable et non vide pour relier les webhooks `invoice.paid` à votre commande. Recréer avec le même `reference_id` et les mêmes conditions de facture renvoie la facture existante ; des conditions différentes échouent avec une erreur d’API `409 reference_id_conflict`.
 - Si vous traitez la commande par ID de facture plutôt que par `reference_id`, enregistrez `invoice_id` avec votre commande au moment de créer la facture.
