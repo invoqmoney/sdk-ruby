@@ -44,6 +44,7 @@ Nécessite Ruby 2.6 ou plus récent.
 1. Connectez-vous au [tableau de bord invoq](https://app.invoq.money) et créez un projet.
 2. Sur la page **API keys**, créez une clé secrète. Les clés de test commencent par `sk_test_`, les clés de production par `sk_live_`. Le mode de la clé détermine si les factures sont de test ou de production.
 3. Dans les réglages **webhooks** de votre projet, enregistrez votre URL de webhook. Le secret du webhook (`whsec_...`) pour ce mode ne s’affiche qu’une seule fois, à la première activation du webhook — notez-le tout de suite. L’URL du webhook doit être une URL HTTPS publique.
+4. Configurez votre **Receiving wallet** avant de passer en production. Les factures de test n’en ont pas besoin ; une facture de production sans destination de règlement échoue avec `409 no_payment_options_available`.
 
 Ajoutez les deux à l’environnement de votre serveur :
 
@@ -89,7 +90,6 @@ Créez une facture :
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -102,8 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Notes :
 
 - Utilisez un montant défini côté serveur. Ne faites pas confiance aux montants envoyés par le client.
-- `amount` est une chaîne décimale en USD de `"0.01"` à `"1000000.00"`, avec au plus 2 décimales, comme `"129"` ou `"129.99"`.
-- `currency` est optionnel et vaut `"USD"` par défaut.
+- `amount` est une chaîne décimale en USD de `"0.01"` à `"1000000.00"`, avec au plus 2 décimales, comme `"129"` ou `"129.99"`. La devise est toujours l’USD, et le mode test ou live vient de la clé : ni l’un ni l’autre n’est un champ de la requête.
 - Utilisez un `reference_id` stable et non vide pour relier les webhooks `invoice.paid` à votre commande. Recréer avec le même `reference_id` et les mêmes conditions de facture renvoie la facture existante ; des conditions différentes échouent avec une erreur d’API `409 reference_id_conflict`.
 - Si vous traitez la commande par ID de facture plutôt que par `reference_id`, enregistrez `invoice_id` avec votre commande au moment de créer la facture.
 - Omettez `return_url` pour utiliser l’URL de retour par défaut du projet. Passez `nil` pour envoyer `null` en JSON et créer la facture sans URL de retour. Lors des relances avec le même `reference_id`, passez `return_url` explicitement quand vous devez garantir une valeur spécifique.
@@ -115,7 +114,7 @@ Récupérez une facture :
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` renvoie la forme de facture publique utilisée par la page de checkout hébergée. Elle inclut des champs tels que `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` et `direct_onchain_rails`, mais n’inclut pas `reference_id`. Utilisez la réponse de création ou le webhook `invoice.paid` quand vous avez besoin de votre `reference_id` marchand.
+`invoices.get` renvoie la forme de facture publique utilisée par la page de checkout hébergée : la forme de la réponse de création, plus `amount_paid`, `project` et `transfers`, moins `reference_id`. Utilisez la réponse de création ou le webhook `invoice.paid` quand vous avez besoin de votre `reference_id` marchand.
 
 Créez un paiement de test :
 
@@ -133,7 +132,7 @@ Les factures de test ne peuvent pas recevoir de vrais fonds. Simulez plutôt les
 
 `reference_id` est optionnel pour les paiements de test. Omettez-le quand il n’est pas défini ; ne passez pas `nil`.
 
-Pour recevoir des webhooks sur votre machine, exposez votre serveur local via un tunnel HTTPS comme ngrok ou cloudflared, et enregistrez l’URL du tunnel comme URL de webhook de test dans le tableau de bord. Le tableau de bord peut aussi envoyer un `webhook.ping` signé pour vérifier la connectivité.
+Pour recevoir des webhooks sur votre machine, exposez votre serveur local via un tunnel HTTPS comme ngrok ou cloudflared, et enregistrez l’URL du tunnel comme URL de webhook de test dans le tableau de bord.
 
 Chaque méthode de facture renvoie directement l’objet `data` de la réponse sous forme de hash Ruby.
 
@@ -149,11 +148,17 @@ Partagez le lien ou redirigez-y quand une fenêtre de paiement intégrée à la 
 
 ## Entrées et réponses
 
-Le SDK vérifie que les valeurs `amount` et les arguments `invoice_id` sont des chaînes non vides avant d’envoyer les requêtes. L’API invoq valide le format, la plage et la devise du montant.
+Le SDK vérifie que les valeurs `amount` et les arguments `invoice_id` sont des chaînes non vides avant d’envoyer les requêtes. L’API invoq valide le format et la plage du montant.
 
-Laissez les champs optionnels non définis en dehors du hash de requête. Quand vous incluez `description` ou `reference_id`, passez une chaîne. `return_url` peut être une chaîne ou `nil`.
+Laissez les champs optionnels non définis en dehors du hash de requête. Quand vous incluez `description` ou `reference_id`, passez une chaîne. `return_url` peut être une chaîne ou `nil`. Toute autre clé du hash est ignorée plutôt qu’envoyée, car l’API rejette les clés de corps inconnues.
 
-Les montants des réponses sont normalisés à 4 décimales : créez avec `"129"` et la facture renvoie `amount: "129.0000"`. Comparez les montants numériquement, pas comme des chaînes. `amount_due` est dérivé sous la forme `max(amount - amount_paid, 0)` et utilise la même échelle à 18 décimales que `amount_paid` ; `amount_overpaid` en est le miroir, `max(amount_paid - amount, 0)`, si bien que vous n’avez jamais à soustraire d’argent vous-même. `monitoring_status` vaut `"active"` ou `"ended"` — une fois à `"ended"`, l’adresse de dépôt n’est plus surveillée — et `transfers` est le journal confirmé des encaissements on-chain (chaque entrée a `tx_hash`, `amount` et `explorer_tx_url`). Les deux valent `nil` / `[]` pour les factures de test.
+Les montants des réponses sont normalisés à 4 décimales : créez avec `"129"` et la facture renvoie `amount: "129.0000"`. Comparez les montants numériquement, pas comme des chaînes. `amount_due` est dérivé sous la forme `max(amount - amount_paid, 0)` et utilise la même échelle à 18 décimales que `amount_paid` ; `amount_overpaid` en est le miroir, `max(amount_paid - amount, 0)`, si bien que vous n’avez jamais à soustraire d’argent vous-même.
+
+Deux champs de statut. `status` est le statut comptable — `unpaid`, `partially_paid`, `paid`, `settling`, `settled`, `review_required` — et les trois valeurs assimilables à un paiement validé ne diffèrent que par l’avancement des fonds vers votre portefeuille. `checkout_status` est celui vu par le payeur — `open`, `confirming`, `expired`, `paid`, `unavailable` — et n’autorise jamais le traitement d’une commande. `payment_revision` est un entier positif ou nul qui augmente à chaque changement de l’ensemble des paiements confirmés, ce qui permet d’écarter un instantané plus ancien que celui que vous avez déjà.
+
+`payment_options` contient les instructions de paiement, figées à la création et `[]` en mode test. Les entrées se distinguent par `status`, puis par `collection_method` : seule `"ready"` est payable, `"evm_deposit"` porte `deposit_address` et `suggested_amount`, `"direct_exact"` porte `recipient_address` et un `exact_amount` que l’acheteur doit envoyer au chiffre près. `transfers` est le journal confirmé des encaissements — `transaction_id`, `event_index`, `amount`, `explorer_transaction_url` — et reste `[]` tant qu’aucun paiement n’est confirmé. Référence complète des champs : [documentation de l’API REST](https://github.com/invoqmoney/api).
+
+Identifiez une option de paiement par `chain_namespace`, `chain_reference` et `token_address`, jamais par sa position dans le tableau. `monitoring_ends_at` marque la fin de la fenêtre de paiement, et vaut `nil` pour les factures de test.
 
 ## Webhooks
 
@@ -184,6 +189,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # Traitez la commande pour fulfillment_key de façon idempotente.
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # Suspendez ou annulez la commande pour fulfillment_key.
   end
 
   [
@@ -198,6 +208,8 @@ Utilisez les webhooks `invoice.paid` pour traiter les commandes sur votre serveu
 
 Quand `Invoq.invoice_paid?(event)` est vrai, la facture peut être traitée automatiquement ; utilisez le `reference_id` de la facture ou un `id` de facture enregistré pour retrouver et traiter votre commande. Une facture `review_required` n’émet pas encore de webhook `invoice.paid`. Si le checkout renvoie `review_required`, affichez un état en attente de vérification et attendez un webhook `invoice.paid` ultérieur après validation.
 
+invoq envoie aussi `invoice.payment_reversed` quand une facture déjà payée repasse sous son montant — par exemple lorsqu’une réorganisation de chaîne annule un transfert confirmé. Interceptez-le avec `Invoq.invoice_payment_reversed?(event)`, puis suspendez ou annulez le traitement selon votre propre politique.
+
 Important :
 
 - Passez exactement la chaîne du corps brut de la requête reçue par votre framework Ruby.
@@ -205,9 +217,10 @@ Important :
 - `verify_webhook` ne nécessite ni `Invoq.new(...)` ni votre clé secrète d’API invoq.
 - Utilisez votre secret de webhook (`whsec_...`), pas `INVOQ_SECRET_KEY`.
 - Rendez le traitement idempotent. Les livraisons de webhook retentées peuvent envoyer le même événement plusieurs fois.
-- Répondez rapidement avec un 2xx. Tout autre statut compte comme une livraison échouée. Les échecs transitoires comme les délais dépassés, `429` et les réponses `5xx` sont retentés ; les autres réponses `4xx` ne le sont pas.
+- Répondez vite avec un 2xx. Tout autre statut compte comme une livraison échouée et est retenté, y compris les redirections et les `4xx` : une fenêtre de déploiement ou une route temporairement mal aiguillée est donc retentée, pas abandonnée. Les délais sont de 1 minute, 5 minutes, 30 minutes, puis 2 heures, pour 5 tentatives au total.
+- Les livraisons peuvent arriver dans le désordre. Gardez l’instantané dont le `payment_revision` est le plus élevé.
 
-`Invoq.invoice_paid?` accepte les événements `invoice.paid` traitables dont le statut de facture est `paid`, `settling` ou `settled` ; il rejette `review_required`.
+`Invoq.invoice_paid?` accepte les événements `invoice.paid` traitables dont le statut de facture est `paid`, `settling` ou `settled` ; il rejette `review_required`. `Invoq.invoice_payment_reversed?` accepte les événements `invoice.payment_reversed` sans vérifier le statut du tout : une annulation que vous laissez tomber laisse une commande traitée sur un paiement qui n’existe plus. Un type d’événement que cette version du SDK ne modélise pas encore est tout de même vérifié et renvoyé tel quel.
 
 Les échecs de vérification de webhook lèvent `Invoq::SignatureVerificationError`. Le SDK tolère un décalage d’horodatage de 5 minutes. L’en-tête de signature est :
 
@@ -219,7 +232,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code

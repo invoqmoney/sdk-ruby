@@ -54,15 +54,16 @@ module Invoq
         raise Error, "request body must be a hash."
       end
 
+      # Only these four fields exist: the API rejects unknown body keys, and
+      # currency (always USD) and mode (from the key) are not request fields,
+      # so anything else in the hash is dropped rather than forwarded.
       body = {
         "amount" => required_request_string(input_value(input, "amount"), "amount")
       }
-      currency = optional_request_value(input, "currency")
       description = optional_request_string(input, "description")
       reference_id = optional_request_string(input, "reference_id")
       return_url = optional_nullable_request_string(input, "return_url")
 
-      body["currency"] = currency unless currency.equal?(MISSING)
       body["description"] = description unless description.equal?(MISSING)
       body["reference_id"] = reference_id unless reference_id.equal?(MISSING)
       body["return_url"] = return_url unless return_url.equal?(MISSING)

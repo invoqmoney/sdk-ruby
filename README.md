@@ -49,6 +49,9 @@ Requires Ruby 2.6 or newer.
 3. In your project's **webhooks** settings, save your webhook URL. The webhook
    secret (`whsec_...`) for that mode is shown once, when you first enable the
    webhook. Store it right away. Webhook URLs must be public HTTPS URLs.
+4. Set up your **Receiving wallet** before going live. Test invoices don't need
+   one; a live invoice with nowhere to settle fails with
+   `409 no_payment_options_available`.
 
 Add both to your server environment:
 
@@ -97,7 +100,6 @@ Create an invoice:
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -111,8 +113,8 @@ Notes:
 
 - Use a server-side amount. Do not trust client-supplied amounts.
 - `amount` is a decimal USD string from `"0.01"` to `"1000000.00"` with up
-  to 2 decimal places, such as `"129"` or `"129.99"`.
-- `currency` is optional and defaults to `"USD"`.
+  to 2 decimal places, such as `"129"` or `"129.99"`. Currency is always USD,
+  and test or live comes from the key — neither is a request field.
 - Use a stable, non-empty `reference_id` to map `invoice.paid` webhooks back to
   your order. Creating again with the same `reference_id` and invoice terms
   returns the existing invoice; different terms fail with a
@@ -131,12 +133,10 @@ Get an invoice:
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` returns the public invoice shape used by hosted checkout. It
-includes fields such as `amount_paid`, `amount_due`, `amount_overpaid`,
-`payment_status`, `project`, `deposit_address`, `monitoring_ends_at`,
-`monitoring_status`, `transfers`, and `direct_onchain_rails`, but does not
-include `reference_id`. Use the create response or `invoice.paid` webhook when
-you need your merchant `reference_id`.
+`invoices.get` returns the public invoice shape used by hosted checkout: the
+create shape plus `amount_paid`, `project`, and `transfers`, minus
+`reference_id`. Use the create response or the `invoice.paid` webhook when you
+need your merchant `reference_id`.
 
 Create a test payment:
 
@@ -161,8 +161,7 @@ webhook URL.
 
 To receive webhooks on your machine, expose your local server with an HTTPS
 tunnel such as ngrok or cloudflared and save the tunnel URL as your test webhook
-URL in the dashboard. The dashboard can also send a signed `webhook.ping` to
-check connectivity.
+URL in the dashboard.
 
 Each invoice method returns the response `data` object directly as a Ruby hash.
 
@@ -179,22 +178,40 @@ Share the link or redirect to it when an in-page checkout modal is not a fit.
 ## Inputs and responses
 
 The SDK checks that `amount` values and `invoice_id` arguments are non-empty
-strings before sending requests. The invoq API validates the amount format,
-range, and currency.
+strings before sending requests. The invoq API validates the amount format and
+range.
 
 Leave unset optional fields out of the request hash. When you include
 `description` or `reference_id`, pass a string. `return_url` can be a string or
-`nil`.
+`nil`. Any other key in the hash is dropped rather than sent, because the API
+rejects unknown body keys.
 
 Amounts in responses are normalized to 4 decimal places: create with `"129"`
 and the invoice returns `amount: "129.0000"`. Compare amounts numerically, not
 as strings. `amount_due` is derived as `max(amount - amount_paid, 0)` and uses
 the same 18-decimal scale as `amount_paid`; `amount_overpaid` is its mirror,
 `max(amount_paid - amount, 0)`, so you never subtract money yourself.
-`monitoring_status` is `"active"` or `"ended"` — once it is `"ended"`, the
-deposit address is no longer watched — and `transfers` is the confirmed
-on-chain receipt trail (each entry has `tx_hash`, `amount`, and
-`explorer_tx_url`). Both are `nil` / `[]` for test invoices.
+
+Two status fields. `status` is the accounting one — `unpaid`, `partially_paid`,
+`paid`, `settling`, `settled`, `review_required` — where the three paid-like
+values differ only in how far the funds have moved to your wallet.
+`checkout_status` is payer-facing — `open`, `confirming`, `expired`, `paid`,
+`unavailable` — and never authorizes fulfillment. `payment_revision` is a
+non-negative integer that increments whenever the confirmed payment set changes,
+so you can discard a snapshot older than one you already hold.
+
+`payment_options` holds the payment instructions, fixed at creation and `[]` in
+test mode. Entries are discriminated by `status`, then `collection_method`: only
+`"ready"` is payable, `"evm_deposit"` carries `deposit_address` and
+`suggested_amount`, `"direct_exact"` carries `recipient_address` and an
+`exact_amount` the buyer must send to the digit. `transfers` is the confirmed
+receipt trail — `transaction_id`, `event_index`, `amount`,
+`explorer_transaction_url` — and stays `[]` until a payment confirms. Full field
+reference: [REST API docs](https://github.com/invoqmoney/api).
+
+Identify a payment option by `chain_namespace`, `chain_reference`, and
+`token_address`, never by its position in the array. `monitoring_ends_at` is the
+end of the payment window, and is `nil` for test invoices.
 
 ## Webhooks
 
@@ -229,6 +246,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # Fulfill the order for fulfillment_key idempotently.
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # Hold or reverse the order for fulfillment_key.
   end
 
   [
@@ -245,10 +267,15 @@ from browser results.
 
 When `Invoq.invoice_paid?(event)` is true, the invoice is ready for automatic
 fulfillment; use the invoice `reference_id` or a stored invoice `id` to find
-and fulfill your order. A `review_required` invoice does not emit an
-`invoice.paid` webhook yet. If checkout reports `review_required`, show a
+and fulfill your order. A `review_required` invoice emits no `invoice.paid`
+until the review clears. If checkout reports `review_required`, show a
 pending-review state and wait for a later `invoice.paid` webhook after review
 is approved.
+
+invoq also sends `invoice.payment_reversed` when a previously paid invoice drops
+back below its amount — a chain reorg dropping a confirmed transfer, for
+example. Catch it with `Invoq.invoice_payment_reversed?(event)` and hold or
+reverse the fulfillment according to your own policy.
 
 Important:
 
@@ -259,12 +286,19 @@ Important:
 - Use your webhook secret (`whsec_...`), not `INVOQ_SECRET_KEY`.
 - Make fulfillment idempotent. Retried webhook deliveries can send the same
   event more than once.
-- Respond with a 2xx quickly. Any other status counts as a failed delivery.
-  Transient failures such as timeouts, `429`, and `5xx` responses are retried;
-  other `4xx` responses are not.
+- Respond with a 2xx quickly. Any other status counts as a failed delivery and
+  is retried, including redirects and `4xx`, so a deploy window or a temporarily
+  misrouted path is retried rather than dropped. The ladder is 1 minute,
+  5 minutes, 30 minutes, then 2 hours, for 5 attempts in total.
+- Deliveries can arrive out of order. Keep the snapshot with the highest
+  `payment_revision`.
 
 `Invoq.invoice_paid?` accepts fulfillable `invoice.paid` events whose invoice
 status is `paid`, `settling`, or `settled`; it rejects `review_required`.
+`Invoq.invoice_payment_reversed?` accepts `invoice.payment_reversed` events
+without checking the status at all: a reversal you drop leaves an order
+fulfilled on a payment that no longer exists. An event type this SDK version
+does not model still verifies and is returned as-is.
 
 Webhook verification failures raise `Invoq::SignatureVerificationError`. The
 SDK allows a 5-minute timestamp tolerance. The signature header is:
@@ -277,7 +311,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code

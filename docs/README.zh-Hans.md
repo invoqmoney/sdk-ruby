@@ -44,6 +44,7 @@ gem "invoq"
 1. 登录 [invoq 商户后台](https://app.invoq.money)，创建一个项目。
 2. 在 **API keys** 页面创建一把密钥（secret key）。测试密钥以 `sk_test_` 开头，正式密钥以 `sk_live_` 开头；用哪种密钥，决定开出的账单是测试单还是正式单。
 3. 在项目的 **webhooks** 设置里保存你的 webhook URL。对应模式的 webhook 签名密钥（`whsec_...`）只在首次启用 webhook 时展示一次——记得马上存好。webhook URL 必须是公网可访问的 HTTPS 地址。
+4. 上线前先设置 **Receiving wallet**。测试账单不需要它；没有结算去向的正式账单会以 `409 no_payment_options_available` 失败。
 
 把两者都加进服务端环境变量：
 
@@ -89,7 +90,6 @@ invoq = Invoq.new(
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -102,8 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 说明：
 
 - 金额要由服务端决定，不要相信客户端传来的金额。
-- `amount` 是 `"0.01"` 到 `"1000000.00"` 之间的十进制美元字符串，最多两位小数，比如 `"129"` 或 `"129.99"`。
-- `currency` 可选，默认为 `"USD"`。
+- `amount` 是 `"0.01"` 到 `"1000000.00"` 之间的十进制美元字符串，最多两位小数，比如 `"129"` 或 `"129.99"`。币种恒为 USD，测试还是正式由密钥决定——两者都不是请求字段。
 - 用一个稳定、非空的 `reference_id`，把 `invoice.paid` webhook 对应回你的订单。用相同的 `reference_id` 和相同的账单条款再次创建，返回的是已有账单；条款不同则会报 `409 reference_id_conflict` API 错误。
 - 如果你是按账单 ID（而不是 `reference_id`）来履约的，请在创建账单时把 `invoice_id` 和订单一起存下来。
 - 省略 `return_url` 时，会使用项目的默认回跳地址。传入 `nil` 会发送 JSON `null`，创建一张没有回跳地址的账单。用 `reference_id` 重试时，如果需要确保某个具体的值，请显式传入 `return_url`。
@@ -115,7 +114,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` 返回托管收银页使用的公开账单结构。它包含 `amount_paid`、`amount_due`、`amount_overpaid`、`payment_status`、`project`、`deposit_address`、`monitoring_ends_at`、`monitoring_status`、`transfers` 和 `direct_onchain_rails` 等字段，但不包含 `reference_id`。如果需要商户侧的 `reference_id`，请使用创建账单的响应或 `invoice.paid` webhook。
+`invoices.get` 返回托管收银页使用的公开账单结构：即创建响应的结构，加上 `amount_paid`、`project` 和 `transfers`，去掉 `reference_id`。如果需要商户侧的 `reference_id`，请使用创建账单的响应或 `invoice.paid` webhook。
 
 创建一笔测试付款：
 
@@ -133,7 +132,7 @@ paid_invoice = invoq.invoices.create_test_payment(
 
 测试付款的 `reference_id` 是可选的。不需要时就省略，不要传 `nil`。
 
-要在本机接收 webhook，用 ngrok、cloudflared 之类的 HTTPS 隧道把本地服务暴露出去，再把隧道地址保存为商户后台里的测试 webhook URL。后台还能发送一条带签名的 `webhook.ping`，帮你确认连通性。
+要在本机接收 webhook，用 ngrok、cloudflared 之类的 HTTPS 隧道把本地服务暴露出去，再把隧道地址保存为商户后台里的测试 webhook URL。
 
 每个账单方法都会直接把响应中的 `data` 对象作为 Ruby 哈希（hash）返回。
 
@@ -149,11 +148,17 @@ https://pay.invoq.money/<invoice id>
 
 ## 入参与响应
 
-SDK 在发送请求前，会检查 `amount` 值和 `invoice_id` 参数是不是非空字符串。金额的格式、范围和币种由 invoq API 负责校验。
+SDK 在发送请求前，会检查 `amount` 值和 `invoice_id` 参数是不是非空字符串。金额的格式和范围由 invoq API 负责校验。
 
-不需要的可选字段就别放进请求的哈希里。如果要带上 `description` 或 `reference_id`，请传字符串。`return_url` 可以是字符串或 `nil`。
+不需要的可选字段就别放进请求的哈希里。如果要带上 `description` 或 `reference_id`，请传字符串。`return_url` 可以是字符串或 `nil`。哈希里的其他键会被丢掉而不会发出去，因为 API 会拒绝未知的请求体字段。
 
-响应里的金额统一格式化为 4 位小数：用 `"129"` 创建，账单返回 `amount: "129.0000"`。比较金额请按数值比较，不要按字符串比较。`amount_due` 按 `max(amount - amount_paid, 0)` 派生，使用和 `amount_paid` 相同的 18 位小数 scale；`amount_overpaid` 与它互为镜像，即 `max(amount_paid - amount, 0)`，所以你不必自己做减法。`monitoring_status` 取值 `"active"` 或 `"ended"`——一旦变为 `"ended"`，收款地址就不再被监控——而 `transfers` 是已确认的链上收款记录（每一项都含 `tx_hash`、`amount` 和 `explorer_tx_url`）。测试账单里两者分别为 `nil` / `[]`。
+响应里的金额统一格式化为 4 位小数：用 `"129"` 创建，账单返回 `amount: "129.0000"`。比较金额请按数值比较，不要按字符串比较。`amount_due` 按 `max(amount - amount_paid, 0)` 派生，使用和 `amount_paid` 相同的 18 位小数 scale；`amount_overpaid` 与它互为镜像，即 `max(amount_paid - amount, 0)`，所以你不必自己做减法。
+
+账单有两个状态字段。`status` 是记账状态——`unpaid`、`partially_paid`、`paid`、`settling`、`settled`、`review_required`，其中三个等同于已付款的取值只差在资金离你的钱包还有多远。`checkout_status` 是付款人看到的状态——`open`、`confirming`、`expired`、`paid`、`unavailable`——它从不构成履约依据。`payment_revision` 是一个非负整数，每当已确认的付款集合变化就加一，你可以据此丢掉比手上更旧的快照。
+
+`payment_options` 装的是付款指令，创建时即固定，测试模式下为 `[]`。每一项先按 `status` 分辨，再按 `collection_method` 分辨：只有 `"ready"` 可付，`"evm_deposit"` 带 `deposit_address` 和 `suggested_amount`，`"direct_exact"` 带 `recipient_address` 以及买家必须一位不差转出的 `exact_amount`。`transfers` 是已确认的收款记录——`transaction_id`、`event_index`、`amount`、`explorer_transaction_url`——在有付款确认前一直是 `[]`。完整字段说明见 [REST API 文档](https://github.com/invoqmoney/api)。
+
+请用 `chain_namespace`、`chain_reference` 和 `token_address` 来标识一个付款方式，不要用它在数组里的位置。`monitoring_ends_at` 是付款窗口的结束时间，测试账单里为 `nil`。
 
 ## Webhook
 
@@ -184,6 +189,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # 幂等地履约 fulfillment_key 对应的订单。
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # 暂停或撤销 fulfillment_key 对应的订单。
   end
 
   [
@@ -198,6 +208,8 @@ end
 
 当 `Invoq.invoice_paid?(event)` 为 true 时，账单就可以自动履约了；用账单的 `reference_id` 或你存下来的账单 `id` 找到并履约对应的订单。`review_required` 账单暂时还不会发送 `invoice.paid` webhook。如果收银台返回 `review_required`，请展示待审核状态，并等审核通过后的 `invoice.paid` webhook 再履约。
 
+账单从已付款跌回不足额时，invoq 还会发 `invoice.payment_reversed`——比如链重组把一笔已确认的转账拿掉了。用 `Invoq.invoice_payment_reversed?(event)` 接住它，再按你自己的策略暂停或撤销履约。
+
 重要：
 
 - 传入你的 Ruby 框架收到的、原封不动的原始请求体字符串。
@@ -205,9 +217,10 @@ end
 - `verify_webhook` 不需要 `Invoq.new(...)`，也不需要你的 invoq API 密钥。
 - 用你的 webhook 签名密钥（`whsec_...`），不是 `INVOQ_SECRET_KEY`。
 - 履约要做到幂等。webhook 投递会重试，同一事件可能送达不止一次。
-- 尽快返回 2xx。任何其他状态码都算投递失败。超时、`429`、`5xx` 这类临时性失败会重试；其他 `4xx` 则不会。
+- 尽快返回 2xx。任何其他状态码都算投递失败并会重试，重定向和 `4xx` 也在其中，所以一次发版窗口或临时走错的路由会被重试，而不是直接丢弃。间隔依次为 1 分钟、5 分钟、30 分钟、2 小时，总共最多 5 次。
+- 送达顺序不保证。请保留 `payment_revision` 最大的那份快照。
 
-`Invoq.invoice_paid?` 接受可履约的 `invoice.paid` 事件——账单状态为 `paid`、`settling` 或 `settled`；它会拒绝 `review_required`。
+`Invoq.invoice_paid?` 接受可履约的 `invoice.paid` 事件——账单状态为 `paid`、`settling` 或 `settled`；它会拒绝 `review_required`。 `Invoq.invoice_payment_reversed?` 接受 `invoice.payment_reversed` 事件，完全不检查状态：漏掉一次撤销，就会让订单继续挂在一笔已经不存在的付款上。本版 SDK 尚未建模的事件类型同样能验签通过，并原样返回。
 
 webhook 验签失败时会抛出 `Invoq::SignatureVerificationError`。SDK 允许 5 分钟的时间戳容差。签名头格式是：
 
@@ -219,7 +232,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code

@@ -44,6 +44,7 @@ gem "invoq"
 1. เข้าสู่ระบบ[แดชบอร์ด invoq](https://app.invoq.money) แล้วสร้างโปรเจกต์
 2. ที่หน้า **API keys** สร้างคีย์ลับ (secret key) ขึ้นมา คีย์ทดสอบขึ้นต้นด้วย `sk_test_` คีย์จริงขึ้นต้นด้วย `sk_live_` โหมดของคีย์เป็นตัวกำหนดว่าใบแจ้งหนี้ที่สร้างจะเป็นแบบทดสอบหรือของจริง
 3. ในการตั้งค่า **webhooks** ของโปรเจกต์ บันทึก URL ของ webhook ที่จะใช้ ซีเคร็ตของ webhook (`whsec_...`) สำหรับโหมดนั้นจะแสดงแค่ครั้งเดียวตอนเปิดใช้ webhook ครั้งแรก — รีบเก็บไว้ทันที URL ของ webhook ต้องเป็น HTTPS ที่เข้าถึงได้แบบสาธารณะ
+4. ตั้งค่า **Receiving wallet** ของคุณก่อนเปิดใช้งานจริง ใบแจ้งหนี้ทดสอบไม่ต้องใช้ แต่ใบแจ้งหนี้จริงที่ไม่มีปลายทางให้เงินเข้าจะล้มเหลวด้วย `409 no_payment_options_available`
 
 เพิ่มทั้งสองค่าเข้าเป็นตัวแปรสภาพแวดล้อมของเซิร์ฟเวอร์:
 
@@ -89,7 +90,6 @@ invoq = Invoq.new(
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -102,8 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 หมายเหตุ:
 
 - ใช้ยอดเงินที่กำหนดจากฝั่งเซิร์ฟเวอร์ อย่าเชื่อยอดเงินที่ส่งมาจากฝั่งไคลเอนต์
-- `amount` เป็นสตริงเลขทศนิยมสกุล USD ตั้งแต่ `"0.01"` ถึง `"1000000.00"` ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น `"129"` หรือ `"129.99"`
-- `currency` เป็นค่าที่ไม่บังคับ และมีค่าเริ่มต้นเป็น `"USD"`
+- `amount` เป็นสตริงเลขทศนิยมสกุล USD ตั้งแต่ `"0.01"` ถึง `"1000000.00"` ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น `"129"` หรือ `"129.99"` สกุลเงินเป็น USD เสมอ ส่วนโหมดทดสอบหรือโหมดจริงมาจากคีย์ ทั้งสองอย่างไม่ใช่ฟิลด์ใน request
 - ใช้ `reference_id` ที่คงที่และไม่เป็นค่าว่าง เพื่อโยง webhook `invoice.paid` กลับไปหาคำสั่งซื้อของคุณ ถ้าสร้างใบแจ้งหนี้ซ้ำด้วย `reference_id` เดิมและเงื่อนไขเดิม จะได้ใบแจ้งหนี้ใบเดิมกลับมา ส่วนเงื่อนไขที่ต่างกันจะล้มเหลวด้วยข้อผิดพลาด API `409 reference_id_conflict`
 - ถ้าคุณจัดการคำสั่งซื้อโดยใช้ invoice ID แทน `reference_id` ให้เก็บ `invoice_id` ไว้กับคำสั่งซื้อของคุณตอนที่สร้างใบแจ้งหนี้
 - ไม่ต้องใส่ `return_url` หากต้องการใช้ return URL เริ่มต้นของโปรเจกต์ ส่งค่า `nil` เพื่อส่ง JSON `null` และสร้างใบแจ้งหนี้โดยไม่มี return URL เมื่อลองสร้างซ้ำด้วย `reference_id` ให้ส่ง `return_url` มาอย่างชัดเจนเมื่อคุณต้องการระบุค่าที่เจาะจง
@@ -115,7 +114,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` จะคืนรูปแบบใบแจ้งหนี้สาธารณะที่หน้า checkout แบบโฮสต์ใช้ ซึ่งมีฟิลด์อย่าง `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` และ `direct_onchain_rails` แต่ไม่มี `reference_id` ถ้าต้องใช้ `reference_id` ฝั่ง merchant ให้ใช้ response ตอนสร้างใบแจ้งหนี้หรือ webhook `invoice.paid`
+`invoices.get` จะคืนรูปแบบใบแจ้งหนี้สาธารณะที่หน้า checkout แบบโฮสต์ใช้ คือรูปแบบเดียวกับ response ตอนสร้าง บวก `amount_paid`, `project` และ `transfers` แต่ไม่มี `reference_id` ถ้าต้องใช้ `reference_id` ฝั่ง merchant ให้ใช้ response ตอนสร้างใบแจ้งหนี้หรือ webhook `invoice.paid`
 
 สร้างการชำระเงินทดสอบ:
 
@@ -133,7 +132,7 @@ paid_invoice = invoq.invoices.create_test_payment(
 
 `reference_id` เป็นค่าที่ไม่บังคับสำหรับการชำระเงินทดสอบ หากไม่ได้กำหนดค่าก็ไม่ต้องใส่ อย่าส่งค่า `nil`
 
-ถ้าอยากรับ webhook บนเครื่องตัวเอง ให้เปิดเซิร์ฟเวอร์ในเครื่องออกสู่ภายนอกผ่าน HTTPS tunnel อย่าง ngrok หรือ cloudflared แล้วบันทึก URL ของ tunnel เป็น URL webhook ทดสอบในแดชบอร์ด แดชบอร์ดยังส่ง `webhook.ping` แบบมีลายเซ็นมาให้เช็กการเชื่อมต่อได้ด้วย
+ถ้าอยากรับ webhook บนเครื่องตัวเอง ให้เปิดเซิร์ฟเวอร์ในเครื่องออกสู่ภายนอกผ่าน HTTPS tunnel อย่าง ngrok หรือ cloudflared แล้วบันทึก URL ของ tunnel เป็น URL webhook ทดสอบในแดชบอร์ด
 
 เมธอดของใบแจ้งหนี้แต่ละตัวจะคืนออบเจกต์ `data` ของการตอบกลับมาเป็น Ruby hash โดยตรง
 
@@ -149,11 +148,17 @@ https://pay.invoq.money/<invoice id>
 
 ## อินพุตและการตอบกลับ
 
-SDK จะตรวจสอบว่าค่า `amount` และอาร์กิวเมนต์ `invoice_id` เป็นสตริงที่ไม่ว่างเปล่าก่อนส่ง request ส่วน API ของ invoq จะตรวจสอบรูปแบบ, ช่วงค่า และสกุลเงินของยอดเงิน
+SDK จะตรวจสอบว่าค่า `amount` และอาร์กิวเมนต์ `invoice_id` เป็นสตริงที่ไม่ว่างเปล่าก่อนส่ง request ส่วน API ของ invoq จะตรวจสอบรูปแบบและช่วงค่าของยอดเงิน
 
-ฟิลด์ที่ไม่บังคับและไม่ได้กำหนดค่า ให้ละไว้ไม่ต้องใส่ใน request hash เมื่อคุณใส่ `description` หรือ `reference_id` ให้ส่งเป็นสตริง ส่วน `return_url` เป็นได้ทั้งสตริงหรือ `nil`
+ฟิลด์ที่ไม่บังคับและไม่ได้กำหนดค่า ให้ละไว้ไม่ต้องใส่ใน request hash เมื่อคุณใส่ `description` หรือ `reference_id` ให้ส่งเป็นสตริง ส่วน `return_url` เป็นได้ทั้งสตริงหรือ `nil` คีย์อื่นใดใน hash จะถูกตัดทิ้งแทนที่จะส่งออกไป เพราะ API จะปฏิเสธคีย์ใน body ที่ไม่รู้จัก
 
-ยอดเงินในการตอบกลับถูกปรับให้เป็นทศนิยม 4 ตำแหน่งเสมอ: สร้างด้วย `"129"` ใบแจ้งหนี้จะตอบกลับ `amount: "129.0000"` เวลาจะเทียบยอดเงินให้เทียบเป็นตัวเลข อย่าเทียบเป็นสตริง `amount_due` คำนวณจาก `max(amount - amount_paid, 0)` และใช้สเกลทศนิยม 18 ตำแหน่งเหมือน `amount_paid` ขณะที่ `amount_overpaid` เป็นภาพสะท้อนของมัน คือ `max(amount_paid - amount, 0)` คุณจึงไม่ต้องลบเงินเอง `monitoring_status` มีค่าเป็น `"active"` หรือ `"ended"` — พอเป็น `"ended"` แล้ว ที่อยู่รับเงินจะไม่ถูกเฝ้าดูอีกต่อไป — ส่วน `transfers` คือรายการรับเงินบนเชนที่ยืนยันแล้ว (แต่ละรายการมี `tx_hash`, `amount` และ `explorer_tx_url`) ทั้งคู่จะเป็น `nil` / `[]` สำหรับใบแจ้งหนี้ทดสอบ
+ยอดเงินในการตอบกลับถูกปรับให้เป็นทศนิยม 4 ตำแหน่งเสมอ: สร้างด้วย `"129"` ใบแจ้งหนี้จะตอบกลับ `amount: "129.0000"` เวลาจะเทียบยอดเงินให้เทียบเป็นตัวเลข อย่าเทียบเป็นสตริง `amount_due` คำนวณจาก `max(amount - amount_paid, 0)` และใช้สเกลทศนิยม 18 ตำแหน่งเหมือน `amount_paid` ขณะที่ `amount_overpaid` เป็นภาพสะท้อนของมัน คือ `max(amount_paid - amount, 0)` คุณจึงไม่ต้องลบเงินเอง
+
+ใบแจ้งหนี้มีฟิลด์สถานะสองตัว `status` คือสถานะทางบัญชี ได้แก่ `unpaid`, `partially_paid`, `paid`, `settling`, `settled`, `review_required` โดยสามค่าที่ถือว่าชำระแล้วต่างกันแค่ว่าเงินเดินทางไปถึงกระเป๋าเงินของคุณไกลแค่ไหน ส่วน `checkout_status` คือสถานะที่ผู้จ่ายเห็น ได้แก่ `open`, `confirming`, `expired`, `paid`, `unavailable` และไม่เคยเป็นสิ่งที่อนุญาตให้จัดการคำสั่งซื้อ `payment_revision` เป็นจำนวนเต็มที่ไม่ติดลบ และเพิ่มขึ้นทุกครั้งที่ชุดการชำระเงินที่ยืนยันแล้วเปลี่ยนไป คุณจึงทิ้งสแนปช็อตที่เก่ากว่าของที่ถืออยู่ได้
+
+`payment_options` เก็บคำสั่งการชำระเงินไว้ ถูกกำหนดตายตัวตอนสร้างและเป็น `[]` ในโหมดทดสอบ แต่ละรายการแยกด้วย `status` แล้วจึงแยกด้วย `collection_method` มีเฉพาะ `"ready"` ที่จ่ายได้ `"evm_deposit"` จะมี `deposit_address` และ `suggested_amount` ส่วน `"direct_exact"` จะมี `recipient_address` และ `exact_amount` ที่ผู้ซื้อต้องโอนให้ตรงทุกหลัก `transfers` คือรายการรับเงินที่ยืนยันแล้ว — `transaction_id`, `event_index`, `amount`, `explorer_transaction_url` — และเป็น `[]` จนกว่าจะมีการชำระเงินที่ยืนยันแล้ว รายละเอียดทุกฟิลด์: [เอกสาร REST API](https://github.com/invoqmoney/api)
+
+ให้ระบุตัวเลือกการชำระเงินด้วย `chain_namespace`, `chain_reference` และ `token_address` อย่าอ้างอิงจากตำแหน่งในอาร์เรย์ `monitoring_ends_at` คือเวลาสิ้นสุดของช่วงที่รับชำระเงิน และเป็น `nil` สำหรับใบแจ้งหนี้ทดสอบ
 
 ## Webhooks
 
@@ -184,6 +189,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # จัดการคำสั่งซื้อของ fulfillment_key อย่างปลอดภัยเมื่อรับซ้ำ (idempotent)
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # พักหรือย้อนคำสั่งซื้อสำหรับ fulfillment_key
   end
 
   [
@@ -198,6 +208,8 @@ end
 
 เมื่อ `Invoq.invoice_paid?(event)` เป็น true แปลว่าใบแจ้งหนี้พร้อมให้จัดการอัตโนมัติแล้ว ให้ใช้ `reference_id` ของใบแจ้งหนี้ หรือ `id` ของใบแจ้งหนี้ที่เก็บไว้ ไปค้นหาและจัดการคำสั่งซื้อของคุณ ใบแจ้งหนี้สถานะ `review_required` จะยังไม่ส่ง webhook `invoice.paid` หาก checkout ส่งผลลัพธ์เป็น `review_required` ให้แสดงสถานะรอตรวจสอบ และรอ webhook `invoice.paid` ที่จะตามมาหลังการตรวจสอบผ่าน
 
+invoq จะส่ง `invoice.payment_reversed` ด้วย เมื่อใบแจ้งหนี้ที่เคยชำระแล้วกลับลงมาต่ำกว่ายอดอีกครั้ง เช่น เมื่อการ reorg ของเชนทำให้ธุรกรรมที่ยืนยันแล้วหลุดไป ให้ดักด้วย `Invoq.invoice_payment_reversed?(event)` แล้วพักหรือย้อนการจัดการคำสั่งซื้อตามนโยบายของคุณเอง
+
 สำคัญ:
 
 - ส่งสตริงเนื้อหา request ดิบตรงตามที่เฟรมเวิร์ก Ruby ของคุณได้รับมาเป๊ะ ๆ
@@ -205,9 +217,10 @@ end
 - `verify_webhook` ไม่จำเป็นต้องใช้ `Invoq.new(...)` หรือคีย์ลับ API ของ invoq
 - ใช้ซีเคร็ต webhook ของคุณ (`whsec_...`) ไม่ใช่ `INVOQ_SECRET_KEY`
 - จัดการคำสั่งซื้อให้ปลอดภัยเมื่อรับซ้ำ (idempotent) เพราะการส่ง webhook ซ้ำอาจส่งเหตุการณ์เดียวกันมามากกว่าหนึ่งครั้ง
-- ตอบกลับด้วย 2xx ให้เร็ว สถานะอื่นใดถือว่าส่งไม่สำเร็จ ความล้มเหลวชั่วคราวอย่าง timeout, `429` และ `5xx` จะถูกส่งซ้ำ ส่วน `4xx` อื่นจะไม่ส่งซ้ำ
+- ตอบ 2xx ให้เร็ว สถานะอื่นใดถือว่าส่งไม่สำเร็จและจะถูกส่งซ้ำ รวมถึง redirect และ `4xx` ด้วย ดังนั้นช่วงที่กำลัง deploy หรือเส้นทางที่ชี้ผิดชั่วคราวจะถูกส่งซ้ำ ไม่ใช่ถูกทิ้ง ระยะห่างคือ 1 นาที, 5 นาที, 30 นาที แล้ว 2 ชั่วโมง รวมทั้งหมด 5 ครั้ง
+- ลำดับการส่งไม่รับประกัน ให้เก็บสแนปช็อตที่ `payment_revision` สูงสุดไว้
 
-`Invoq.invoice_paid?` จะรับเฉพาะเหตุการณ์ `invoice.paid` ที่จัดการคำสั่งซื้อได้ ซึ่งใบแจ้งหนี้มีสถานะเป็น `paid`, `settling` หรือ `settled` และจะปฏิเสธ `review_required`
+`Invoq.invoice_paid?` จะรับเฉพาะเหตุการณ์ `invoice.paid` ที่จัดการคำสั่งซื้อได้ ซึ่งใบแจ้งหนี้มีสถานะเป็น `paid`, `settling` หรือ `settled` และจะปฏิเสธ `review_required` `Invoq.invoice_payment_reversed?` จะรับเหตุการณ์ `invoice.payment_reversed` โดยไม่ตรวจสถานะเลย เพราะการทิ้งการย้อนรายการไปจะทำให้คำสั่งซื้อยังถูกจัดการอยู่บนการชำระเงินที่ไม่มีอยู่แล้ว ส่วนชนิดเหตุการณ์ที่ SDK เวอร์ชันนี้ยังไม่รู้จักก็ยังผ่านการตรวจลายเซ็นและถูกคืนมาตามเดิม
 
 การตรวจสอบ webhook ที่ล้มเหลวจะโยน `Invoq::SignatureVerificationError` โดย SDK ยอมให้ timestamp คลาดเคลื่อนได้ไม่เกิน 5 นาที รูปแบบของเฮดเดอร์ลายเซ็นคือ:
 
@@ -219,7 +232,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code

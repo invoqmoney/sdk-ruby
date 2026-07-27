@@ -21,4 +21,12 @@ module Invoq
   def self.is_invoice_paid(event)
     invoice_paid?(event)
   end
+
+  def self.invoice_payment_reversed?(event)
+    Webhooks.invoice_payment_reversed?(event)
+  end
+
+  def self.is_invoice_payment_reversed(event)
+    invoice_payment_reversed?(event)
+  end
 end

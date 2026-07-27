@@ -44,6 +44,7 @@ Yêu cầu Ruby 2.6 trở lên.
 1. Đăng nhập [bảng điều khiển invoq](https://app.invoq.money) và tạo một dự án.
 2. Ở trang **API keys**, tạo một khóa bí mật. Khóa thử nghiệm bắt đầu bằng `sk_test_`, khóa thật bằng `sk_live_`. Loại khóa quyết định hóa đơn tạo ra là thử nghiệm hay thật.
 3. Trong phần cài đặt **webhooks** của dự án, lưu URL webhook của bạn. Mã bí mật của webhook (`whsec_...`) cho chế độ đó chỉ hiện đúng một lần, lúc bạn bật webhook lần đầu — hãy lưu lại ngay. URL webhook phải là URL HTTPS truy cập công khai được.
+4. Thiết lập **Receiving wallet** của bạn trước khi lên live. Hóa đơn thử nghiệm không cần ví này; hóa đơn live không có nơi để tất toán sẽ lỗi `409 no_payment_options_available`.
 
 Thêm cả hai vào biến môi trường của máy chủ:
 
@@ -89,7 +90,6 @@ Tạo một hóa đơn:
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -102,8 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Lưu ý:
 
 - Số tiền phải do máy chủ quyết định. Đừng tin số tiền phía client gửi lên.
-- `amount` là chuỗi thập phân USD từ `"0.01"` đến `"1000000.00"`, tối đa 2 chữ số lẻ, ví dụ `"129"` hoặc `"129.99"`.
-- `currency` là tùy chọn và mặc định là `"USD"`.
+- `amount` là chuỗi thập phân USD từ `"0.01"` đến `"1000000.00"`, tối đa 2 chữ số lẻ, ví dụ `"129"` hoặc `"129.99"`. Đơn vị tiền luôn là USD, còn thử nghiệm hay live thì do khóa quyết định — cả hai đều không phải trường trong request.
 - Dùng một `reference_id` ổn định, không rỗng để nối các webhook `invoice.paid` về đúng đơn hàng của bạn. Tạo lại với cùng `reference_id` và cùng nội dung hóa đơn sẽ trả về hóa đơn đã có; nếu nội dung khác nhau, API sẽ báo lỗi `409 reference_id_conflict`.
 - Nếu bạn xử lý đơn hàng theo invoice ID thay vì `reference_id`, hãy lưu `invoice_id` cùng đơn hàng khi tạo hóa đơn.
 - Bỏ qua `return_url` để dùng return URL mặc định của dự án. Truyền `nil` để gửi JSON `null` và tạo hóa đơn không có return URL. Khi thử lại theo `reference_id`, hãy truyền `return_url` một cách tường minh khi bạn cần khẳng định một giá trị cụ thể.
@@ -115,7 +114,7 @@ Lấy một hóa đơn:
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` trả về dạng hóa đơn công khai mà trang checkout được host sử dụng. Nó bao gồm các trường như `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` và `direct_onchain_rails`, nhưng không bao gồm `reference_id`. Hãy dùng phản hồi tạo hóa đơn hoặc webhook `invoice.paid` khi bạn cần `reference_id` phía merchant.
+`invoices.get` trả về dạng hóa đơn công khai mà trang checkout được host sử dụng: dạng phản hồi khi tạo, cộng thêm `amount_paid`, `project` và `transfers`, và bỏ `reference_id`. Hãy dùng phản hồi tạo hóa đơn hoặc webhook `invoice.paid` khi bạn cần `reference_id` phía merchant.
 
 Tạo một thanh toán thử nghiệm:
 
@@ -133,7 +132,7 @@ Hóa đơn thử nghiệm không nhận được tiền thật. Hãy mô phỏng
 
 `reference_id` là tùy chọn với các thanh toán thử nghiệm. Hãy bỏ qua khi không đặt; đừng truyền `nil`.
 
-Để nhận webhook trên máy của mình, hãy mở máy chủ local ra ngoài bằng một tunnel HTTPS như ngrok hay cloudflared, rồi lưu URL tunnel làm URL webhook thử nghiệm trong bảng điều khiển. Bảng điều khiển cũng gửi được một `webhook.ping` có chữ ký để kiểm tra kết nối.
+Để nhận webhook trên máy của mình, hãy mở máy chủ local ra ngoài bằng một tunnel HTTPS như ngrok hay cloudflared, rồi lưu URL tunnel làm URL webhook thử nghiệm trong bảng điều khiển.
 
 Mỗi phương thức hóa đơn trả về trực tiếp đối tượng `data` của phản hồi dưới dạng một hash Ruby.
 
@@ -149,11 +148,17 @@ Hãy gửi link hoặc chuyển hướng sang đó khi cửa sổ thanh toán nh
 
 ## Đầu vào và phản hồi
 
-SDK kiểm tra rằng các giá trị `amount` và các tham số `invoice_id` là chuỗi không rỗng trước khi gửi request. API của invoq xác thực định dạng, khoảng giá trị và loại tiền tệ của số tiền.
+SDK kiểm tra rằng các giá trị `amount` và các tham số `invoice_id` là chuỗi không rỗng trước khi gửi request. API của invoq xác thực định dạng và khoảng giá trị của số tiền.
 
-Đừng đưa các trường tùy chọn không dùng đến vào hash request. Nếu bạn đưa vào `description` hoặc `reference_id`, hãy truyền một chuỗi. `return_url` có thể là một chuỗi hoặc `nil`.
+Đừng đưa các trường tùy chọn không dùng đến vào hash request. Nếu bạn đưa vào `description` hoặc `reference_id`, hãy truyền một chuỗi. `return_url` có thể là một chuỗi hoặc `nil`. Mọi khóa khác trong hash sẽ bị bỏ đi thay vì được gửi đi, vì API từ chối các khóa body lạ.
 
-Số tiền trong phản hồi được chuẩn hóa về 4 chữ số lẻ: tạo với `"129"` thì hóa đơn trả về `amount: "129.0000"`. So sánh số tiền theo giá trị số, đừng so sánh chuỗi. `amount_due` được tính là `max(amount - amount_paid, 0)` và dùng cùng thang 18 chữ số thập phân như `amount_paid`; `amount_overpaid` là bản đối xứng của nó, `max(amount_paid - amount, 0)`, nên bạn không bao giờ phải tự trừ tiền. `monitoring_status` là `"active"` hoặc `"ended"` — khi đã là `"ended"`, địa chỉ nạp tiền không còn được theo dõi nữa — còn `transfers` là danh sách biên nhận trên chuỗi đã xác nhận (mỗi mục có `tx_hash`, `amount` và `explorer_tx_url`). Cả hai đều là `nil` / `[]` với hóa đơn thử nghiệm.
+Số tiền trong phản hồi được chuẩn hóa về 4 chữ số lẻ: tạo với `"129"` thì hóa đơn trả về `amount: "129.0000"`. So sánh số tiền theo giá trị số, đừng so sánh chuỗi. `amount_due` được tính là `max(amount - amount_paid, 0)` và dùng cùng thang 18 chữ số thập phân như `amount_paid`; `amount_overpaid` là bản đối xứng của nó, `max(amount_paid - amount, 0)`, nên bạn không bao giờ phải tự trừ tiền.
+
+Hai trường trạng thái. `status` là trạng thái kế toán — `unpaid`, `partially_paid`, `paid`, `settling`, `settled`, `review_required` — và ba giá trị coi như đã thanh toán chỉ khác nhau ở việc tiền đã đi được bao xa về ví của bạn. `checkout_status` là trạng thái người trả tiền thấy — `open`, `confirming`, `expired`, `paid`, `unavailable` — và không bao giờ là căn cứ xử lý đơn. `payment_revision` là số nguyên không âm, tăng mỗi khi tập hợp thanh toán đã xác nhận thay đổi, nên bạn bỏ được bản chụp cũ hơn bản đang giữ.
+
+`payment_options` chứa hướng dẫn thanh toán, cố định lúc tạo và `[]` ở chế độ thử nghiệm. Các mục phân biệt theo `status`, rồi `collection_method`: chỉ `"ready"` mới trả được, `"evm_deposit"` mang `deposit_address` và `suggested_amount`, `"direct_exact"` mang `recipient_address` và `exact_amount` mà người mua phải gửi đúng đến từng chữ số. `transfers` là danh sách biên nhận đã xác nhận — `transaction_id`, `event_index`, `amount`, `explorer_transaction_url` — và vẫn là `[]` cho tới khi có thanh toán được xác nhận. Tài liệu đầy đủ các trường: [REST API](https://github.com/invoqmoney/api).
+
+Hãy nhận dạng một phương thức thanh toán bằng `chain_namespace`, `chain_reference` và `token_address`, đừng dựa vào vị trí của nó trong mảng. `monitoring_ends_at` là thời điểm kết thúc cửa sổ thanh toán, và là `nil` với hóa đơn thử nghiệm.
 
 ## Webhook
 
@@ -184,6 +189,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # Xử lý đơn hàng cho fulfillment_key một cách an toàn khi lặp lại.
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # Tạm giữ hoặc hoàn tác đơn hàng cho fulfillment_key.
   end
 
   [
@@ -198,6 +208,8 @@ Hãy dùng webhook `invoice.paid` để xử lý đơn hàng trên máy chủ c�
 
 Khi `Invoq.invoice_paid?(event)` là true, hóa đơn đã sẵn sàng để xử lý tự động; dùng `reference_id` của hóa đơn hoặc `id` hóa đơn đã lưu để tìm và xử lý đúng đơn. Hóa đơn ở trạng thái `review_required` hiện chưa gửi webhook `invoice.paid`. Nếu checkout trả về `review_required`, hãy hiển thị trạng thái chờ duyệt và đợi webhook `invoice.paid` sau khi được duyệt.
 
+invoq cũng gửi `invoice.payment_reversed` khi một hóa đơn đã thanh toán tụt trở lại dưới số tiền của nó — chẳng hạn khi chuỗi reorg làm mất một giao dịch đã xác nhận. Bắt sự kiện đó bằng `Invoq.invoice_payment_reversed?(event)`, rồi tạm dừng hoặc hoàn tác việc xử lý theo chính sách của bạn.
+
 Quan trọng:
 
 - Truyền đúng chuỗi nội dung request gốc mà framework Ruby của bạn nhận được.
@@ -205,9 +217,10 @@ Quan trọng:
 - `verify_webhook` không cần `Invoq.new(...)` hay khóa bí mật API invoq của bạn.
 - Dùng mã bí mật webhook (`whsec_...`) của bạn, không phải `INVOQ_SECRET_KEY`.
 - Hãy làm cho việc xử lý đơn an toàn khi lặp lại. Các lần gửi lại webhook có thể gửi cùng một sự kiện nhiều lần.
-- Trả về 2xx thật nhanh. Mọi mã trạng thái khác đều bị tính là giao thất bại. Các lỗi tạm thời như timeout, `429` và `5xx` sẽ được gửi lại; các phản hồi `4xx` khác thì không.
+- Trả về 2xx thật nhanh. Mọi mã trạng thái khác đều bị tính là giao thất bại và sẽ được gửi lại, kể cả redirect và `4xx`, nên một lần deploy hay một đường dẫn tạm thời sai sẽ được gửi lại chứ không bị bỏ. Các lần gửi lại cách nhau 1 phút, 5 phút, 30 phút, rồi 2 giờ, tối đa 5 lần.
+- Thứ tự các lần gửi không được đảm bảo. Hãy giữ bản chụp có `payment_revision` cao nhất.
 
-`Invoq.invoice_paid?` chấp nhận các sự kiện `invoice.paid` có thể xử lý mà trạng thái hóa đơn là `paid`, `settling` hoặc `settled`, và từ chối `review_required`.
+`Invoq.invoice_paid?` chấp nhận các sự kiện `invoice.paid` có thể xử lý mà trạng thái hóa đơn là `paid`, `settling` hoặc `settled`, và từ chối `review_required`. `Invoq.invoice_payment_reversed?` chấp nhận sự kiện `invoice.payment_reversed` mà không kiểm tra trạng thái: bỏ sót một lần hoàn tác sẽ để lại đơn hàng đã xử lý trên một khoản thanh toán không còn tồn tại. Một loại sự kiện mà phiên bản SDK này chưa mô hình hóa vẫn qua được bước xác thực và được trả về nguyên trạng.
 
 Việc xác minh webhook thất bại sẽ ném `Invoq::SignatureVerificationError`. SDK cho phép timestamp lệch tối đa 5 phút. Header chữ ký có dạng:
 
@@ -219,7 +232,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code

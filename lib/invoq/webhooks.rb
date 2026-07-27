@@ -56,34 +56,59 @@ module Invoq
     end
 
     def self.invoice_paid?(event)
-      return false unless event.is_a?(Hash)
-      return false unless event["type"] == "invoice.paid"
-      return false unless event["id"].is_a?(String)
-      return false unless invoice_mode?(event["mode"])
-      return false unless event["created_at"].is_a?(String)
+      invoice = lifecycle_event_invoice(event, "invoice.paid")
 
-      data = event["data"]
-      return false unless data.is_a?(Hash)
-
-      invoice = data["invoice"]
-      return false unless invoice.is_a?(Hash)
-
-      reference_id = invoice.key?("reference_id") ? invoice["reference_id"] : MISSING
-      fully_paid_at = invoice.key?("fully_paid_at") ? invoice["fully_paid_at"] : MISSING
-
-      invoice["id"].is_a?(String) &&
-        invoice_mode?(invoice["mode"]) &&
-        invoice_paid_status?(invoice["status"]) &&
-        invoice["amount"].is_a?(String) &&
-        invoice["currency"] == "USD" &&
-        invoice["amount_paid"].is_a?(String) &&
-        (reference_id.is_a?(String) || reference_id.nil?) &&
-        (fully_paid_at.is_a?(String) || fully_paid_at.nil?)
+      # Paid-equivalent statuses only: review_required has money against it but
+      # is not cleared for fulfillment.
+      !invoice.nil? && invoice_paid_status?(invoice["status"])
     end
 
     def self.is_invoice_paid(event)
       invoice_paid?(event)
     end
+
+    def self.invoice_payment_reversed?(event)
+      # No status check, unlike the paid guard: rejecting an unrecognized status
+      # would drop the event and leave the order fulfilled on a payment that no
+      # longer exists.
+      !lifecycle_event_invoice(event, "invoice.payment_reversed").nil?
+    end
+
+    def self.is_invoice_payment_reversed(event)
+      invoice_payment_reversed?(event)
+    end
+
+    # The fields both lifecycle events share, returned so each guard can apply
+    # its own status rule. nil when this is not a well-formed event of that type.
+    def self.lifecycle_event_invoice(event, type)
+      return nil unless event.is_a?(Hash)
+      return nil unless event["type"] == type
+      return nil unless event["id"].is_a?(String)
+      return nil unless invoice_mode?(event["mode"])
+      return nil unless event["created_at"].is_a?(String)
+
+      data = event["data"]
+      return nil unless data.is_a?(Hash)
+
+      invoice = data["invoice"]
+      return nil unless invoice.is_a?(Hash)
+
+      reference_id = invoice.key?("reference_id") ? invoice["reference_id"] : MISSING
+      fully_paid_at = invoice.key?("fully_paid_at") ? invoice["fully_paid_at"] : MISSING
+
+      valid = invoice["id"].is_a?(String) &&
+        invoice_mode?(invoice["mode"]) &&
+        invoice["status"].is_a?(String) &&
+        invoice["amount"].is_a?(String) &&
+        invoice["currency"] == "USD" &&
+        invoice["amount_paid"].is_a?(String) &&
+        (reference_id.is_a?(String) || reference_id.nil?) &&
+        invoice["payment_revision"].is_a?(Integer) &&
+        (fully_paid_at.is_a?(String) || fully_paid_at.nil?)
+
+      valid ? invoice : nil
+    end
+    private_class_method :lifecycle_event_invoice
 
     def self.parse_signature_header(signature_header)
       parts = {}

@@ -44,6 +44,7 @@ Ruby 2.6 veya üstünü gerektirir.
 1. [invoq paneline](https://app.invoq.money) giriş yapın ve bir proje oluşturun.
 2. **API keys** sayfasında bir gizli anahtar oluşturun. Test anahtarları `sk_test_` ile, canlı anahtarlar `sk_live_` ile başlar. Anahtarın modu, faturaların test mi canlı mı olacağını belirler.
 3. Projenizin **webhooks** ayarlarında webhook URL'nizi kaydedin. O modun webhook sırrı (`whsec_...`) yalnızca bir kez, webhook'u ilk etkinleştirdiğinizde gösterilir — hemen saklayın. Webhook URL'leri herkese açık HTTPS URL'leri olmalı.
+4. Canlıya geçmeden önce **Receiving wallet** ayarınızı yapın. Test faturaları buna ihtiyaç duymaz; paranın gideceği yer olmayan canlı bir fatura `409 no_payment_options_available` ile başarısız olur.
 
 İkisini de sunucu ortamınıza ekleyin:
 
@@ -89,7 +90,6 @@ Bir fatura oluşturun:
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -102,8 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 Notlar:
 
 - Tutarı sunucu tarafında belirleyin. İstemciden gelen tutarlara güvenmeyin.
-- `amount`, `"0.01"` ile `"1000000.00"` arasında, en fazla 2 ondalık basamaklı, USD cinsinden ondalık bir dizedir — örneğin `"129"` veya `"129.99"`.
-- `currency` isteğe bağlıdır ve varsayılan olarak `"USD"` kullanılır.
+- `amount`, `"0.01"` ile `"1000000.00"` arasında, en fazla 2 ondalık basamaklı, USD cinsinden ondalık bir dizedir — örneğin `"129"` veya `"129.99"`. Para birimi her zaman USD'dir ve test mi live mı olduğu anahtardan gelir — ikisi de istek alanı değildir.
 - `invoice.paid` webhook'larını siparişinize geri bağlamak için sabit ve boş olmayan bir `reference_id` kullanın. Aynı `reference_id` ve aynı fatura koşullarıyla tekrar oluşturmak mevcut faturayı döndürür; farklı koşullar ise `409 reference_id_conflict` API hatasıyla başarısız olur.
 - Siparişleri `reference_id` yerine fatura ID'sine göre işliyorsanız, faturayı oluşturduğunuzda `invoice_id` değerini siparişinizle birlikte saklayın.
 - Projenin varsayılan dönüş URL'sini kullanmak için `return_url`'yi belirtmeyin. JSON `null` göndermek ve faturayı dönüş URL'si olmadan oluşturmak için `nil` geçin. `reference_id` ile yeniden denemelerde, belirli bir değeri garanti etmeniz gerektiğinde `return_url`'yi açıkça geçin.
@@ -115,7 +114,7 @@ Bir faturayı getirin:
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get`, barındırılan ödeme sayfasının kullandığı herkese açık fatura şeklini döndürür. `amount_paid`, `amount_due`, `amount_overpaid`, `payment_status`, `project`, `deposit_address`, `monitoring_ends_at`, `monitoring_status`, `transfers` ve `direct_onchain_rails` gibi alanları içerir, ancak `reference_id` içermez. Merchant `reference_id` değeriniz gerektiğinde oluşturma yanıtını veya `invoice.paid` webhook'unu kullanın.
+`invoices.get` barındırılan checkout sayfasının kullandığı herkese açık fatura şeklini döndürür: oluşturma yanıtının şekli, artı `amount_paid`, `project` ve `transfers`, eksi `reference_id`. Merchant `reference_id` değeriniz gerektiğinde oluşturma yanıtını veya `invoice.paid` webhook'unu kullanın.
 
 Test ödemesi oluşturun:
 
@@ -133,7 +132,7 @@ Test faturaları gerçek para alamaz. Bunun yerine ödemeleri sunucunuzdan simü
 
 Test ödemeleri için `reference_id` isteğe bağlıdır. Ayarlanmamışsa belirtmeyin; `nil` geçmeyin.
 
-Webhook'ları kendi makinenizde almak için yerel sunucunuzu ngrok veya cloudflared gibi bir HTTPS tüneliyle dışa açın ve tünel URL'sini panelde test webhook URL'niz olarak kaydedin. Panel, bağlantıyı denetlemek için imzalı bir `webhook.ping` de gönderebilir.
+Webhook'ları kendi makinenizde almak için yerel sunucunuzu ngrok veya cloudflared gibi bir HTTPS tüneliyle dışa açın ve tünel URL'sini panelde test webhook URL'niz olarak kaydedin.
 
 Her fatura metodu, yanıttaki `data` nesnesini doğrudan bir Ruby hash'i olarak döndürür.
 
@@ -149,11 +148,17 @@ Sayfa içi ödeme penceresi uygun olmadığında bağlantıyı paylaşın ya da 
 
 ## Girdiler ve yanıtlar
 
-SDK, istekleri göndermeden önce `amount` değerlerinin ve `invoice_id` argümanlarının boş olmayan dizeler olduğunu denetler. invoq API'si tutar biçimini, aralığını ve para birimini doğrular.
+SDK, istekleri göndermeden önce `amount` değerlerinin ve `invoice_id` argümanlarının boş olmayan dizeler olduğunu denetler. invoq API'si tutar biçimini ve aralığını doğrular.
 
-Ayarlanmamış isteğe bağlı alanları istek hash'inin dışında bırakın. `description` veya `reference_id` eklediğinizde bir dize geçin. `return_url` bir dize ya da `nil` olabilir.
+Ayarlanmamış isteğe bağlı alanları istek hash'inin dışında bırakın. `description` veya `reference_id` eklediğinizde bir dize geçin. `return_url` bir dize ya da `nil` olabilir. Hash'teki başka her anahtar gönderilmez, atılır; çünkü API bilinmeyen gövde anahtarlarını reddeder.
 
-Yanıtlardaki tutarlar 4 ondalık basamağa normalize edilir: `"129"` ile oluşturun, fatura `amount: "129.0000"` döndürür. Tutarları dize olarak değil, sayısal olarak karşılaştırın. `amount_due`, `max(amount - amount_paid, 0)` olarak türetilir ve `amount_paid` ile aynı 18 ondalık basamak ölçeğini kullanır; `amount_overpaid` ise onun aynasıdır, `max(amount_paid - amount, 0)`, yani parayı kendiniz çıkarmanız hiç gerekmez. `monitoring_status`, `"active"` ya da `"ended"` olur — `"ended"` olduğunda yatırma adresi artık izlenmez — ve `transfers`, onaylanmış zincir üstü tahsilat kaydıdır (her girdide `tx_hash`, `amount` ve `explorer_tx_url` bulunur). İkisi de test faturaları için `nil` / `[]` olur.
+Yanıtlardaki tutarlar 4 ondalık basamağa normalize edilir: `"129"` ile oluşturun, fatura `amount: "129.0000"` döndürür. Tutarları dize olarak değil, sayısal olarak karşılaştırın. `amount_due`, `max(amount - amount_paid, 0)` olarak türetilir ve `amount_paid` ile aynı 18 ondalık basamak ölçeğini kullanır; `amount_overpaid` ise onun aynasıdır, `max(amount_paid - amount, 0)`, yani parayı kendiniz çıkarmanız hiç gerekmez.
+
+İki durum alanı. `status` muhasebe durumudur — `unpaid`, `partially_paid`, `paid`, `settling`, `settled`, `review_required` — ve ödeme tamamlanmış sayılan üç değer yalnızca paranın cüzdanınıza ne kadar yaklaştığıyla ayrılır. `checkout_status` ödeyenin gördüğüdür — `open`, `confirming`, `expired`, `paid`, `unavailable` — ve siparişi işlemek için asla yetki vermez. `payment_revision`, negatif olmayan bir tam sayıdır ve onaylanmış ödeme kümesi her değiştiğinde artar; böylece elinizdekinden eski bir anlık görüntüyü eleyebilirsiniz.
+
+`payment_options` ödeme talimatlarını taşır; oluşturulurken sabitlenir ve test modunda `[]` olur. Girdiler önce `status`, sonra `collection_method` ile ayrışır: yalnızca `"ready"` ödenebilir, `"evm_deposit"` `deposit_address` ve `suggested_amount` taşır, `"direct_exact"` `recipient_address` ile alıcının son hanesine kadar göndermesi gereken `exact_amount` değerini taşır. `transfers` onaylanmış tahsilat kaydıdır — `transaction_id`, `event_index`, `amount`, `explorer_transaction_url` — ve bir ödeme onaylanana kadar `[]` kalır. Tüm alanlar: [REST API belgeleri](https://github.com/invoqmoney/api).
+
+Bir ödeme seçeneğini `chain_namespace`, `chain_reference` ve `token_address` ile tanıyın; dizideki sırasıyla asla. `monitoring_ends_at` ödeme penceresinin sonudur ve test faturalarında `nil` olur.
 
 ## Webhook'lar
 
@@ -184,6 +189,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # fulfillment_key için siparişi idempotent şekilde işleyin.
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # fulfillment_key için siparişi bekletin veya geri alın.
   end
 
   [
@@ -198,6 +208,8 @@ Siparişleri sunucunuzda işlemek için `invoice.paid` webhook'larını kullanı
 
 `Invoq.invoice_paid?(event)` true olduğunda fatura otomatik işlenmeye hazırdır; siparişinizi bulup işlemek için faturanın `reference_id` değerini ya da sakladığınız fatura `id`'sini kullanın. `review_required` durumundaki bir fatura henüz `invoice.paid` webhook'u göndermez. Checkout `review_required` bildirirse inceleme bekleyen bir durum gösterin ve inceleme onaylandıktan sonra gelecek `invoice.paid` webhook'unu bekleyin.
 
+invoq, daha önce ödenmiş bir fatura kendi tutarının altına geri düştüğünde `invoice.payment_reversed` de gönderir — örneğin zincir reorg'u onaylanmış bir transferi düşürdüğünde. Bunu `Invoq.invoice_payment_reversed?(event)` ile yakalayın ve kendi politikanıza göre siparişi bekletin veya geri alın.
+
 Önemli:
 
 - Ruby framework'ünüzün aldığı tam ham istek gövdesi dizesini geçin.
@@ -205,9 +217,10 @@ Siparişleri sunucunuzda işlemek için `invoice.paid` webhook'larını kullanı
 - `verify_webhook`, `Invoq.new(...)` çağrısını ya da invoq API gizli anahtarınızı gerektirmez.
 - `INVOQ_SECRET_KEY`'i değil, webhook sırrınızı (`whsec_...`) kullanın.
 - Sipariş işlemeyi idempotent yapın. Yeniden denenen webhook teslimatları aynı olayı birden fazla kez gönderebilir.
-- Hızlıca 2xx yanıtı dönün. Başka herhangi bir durum kodu başarısız teslimat sayılır. Zaman aşımları, `429` ve `5xx` yanıtları gibi geçici hatalar yeniden denenir; diğer `4xx` yanıtları denenmez.
+- Hızla 2xx dönün. Diğer her durum kodu başarısız teslimat sayılır ve yeniden denenir; yönlendirmeler ve `4xx` yanıtları da buna dahildir; yani bir dağıtım penceresi ya da geçici olarak yanlış yönlenmiş bir yol atılmaz, yeniden denenir. Aralar 1 dakika, 5 dakika, 30 dakika, ardından 2 saat; toplamda 5 deneme.
+- Teslimatlar sırasız gelebilir. `payment_revision` değeri en yüksek olan anlık görüntüyü saklayın.
 
-`Invoq.invoice_paid?`, fatura durumu `paid`, `settling` veya `settled` olan işlenebilir `invoice.paid` olaylarını kabul eder; `review_required` durumunu reddeder.
+`Invoq.invoice_paid?`, fatura durumu `paid`, `settling` veya `settled` olan işlenebilir `invoice.paid` olaylarını kabul eder; `review_required` durumunu reddeder. `Invoq.invoice_payment_reversed?`, `invoice.payment_reversed` olaylarını durumu hiç denetlemeden kabul eder: elden kaçırdığınız bir geri alma, artık var olmayan bir ödemenin üzerine işlenmiş bir sipariş bırakır. Bu SDK sürümünün henüz modellemediği bir olay tipi de doğrulanır ve olduğu gibi döndürülür.
 
 Webhook doğrulama hataları `Invoq::SignatureVerificationError` fırlatır. SDK, 5 dakikalık bir zaman damgası toleransına izin verir. İmza başlığı şudur:
 
@@ -219,7 +232,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code

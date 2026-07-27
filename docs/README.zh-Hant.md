@@ -44,6 +44,7 @@ gem "invoq"
 1. 登入 [invoq 商家後台](https://app.invoq.money)，建立一個專案。
 2. 在 **API keys** 頁面建立一組私密金鑰（secret key）。測試金鑰以 `sk_test_` 開頭，正式金鑰以 `sk_live_` 開頭；用哪種金鑰，決定開出的帳單是測試單還是正式單。
 3. 在專案的 **webhooks** 設定裡儲存你的 webhook URL。對應模式的 webhook 簽章金鑰（`whsec_...`）只在首次啟用 webhook 時顯示一次——記得馬上存好。webhook URL 必須是可公開存取的 HTTPS 網址。
+4. 上線前先設定 **Receiving wallet**。測試帳單不需要它；沒有結算去向的正式帳單會以 `409 no_payment_options_available` 失敗。
 
 把兩者都加進伺服器的環境變數：
 
@@ -89,7 +90,6 @@ invoq = Invoq.new(
 ```ruby
 invoice = invoq.invoices.create(
   amount: "129",
-  currency: "USD",
   description: "SaaS boilerplate",
   reference_id: "order_1234",
   return_url: "https://merchant.example/thanks"
@@ -102,8 +102,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 說明：
 
 - 金額要由伺服器端決定，不要相信用戶端傳來的金額。
-- `amount` 是 `"0.01"` 到 `"1000000.00"` 之間的十進位美元字串，最多兩位小數，例如 `"129"` 或 `"129.99"`。
-- `currency` 是選填，預設為 `"USD"`。
+- `amount` 是 `"0.01"` 到 `"1000000.00"` 之間的十進位美元字串，最多兩位小數，例如 `"129"` 或 `"129.99"`。幣別恆為 USD，測試還是正式由金鑰決定——兩者都不是請求欄位。
 - 用一個穩定、非空的 `reference_id`，把 `invoice.paid` webhook 對應回你的訂單。用相同的 `reference_id` 和相同的帳單條件再建立一次，回傳的是既有帳單；條件不同則會回 `409 reference_id_conflict` API 錯誤。
 - 如果你是用帳單 ID 而不是 `reference_id` 來履約，建立帳單時就把 `invoice_id` 和你的訂單一起存起來。
 - 省略 `return_url` 就會使用專案的預設 return URL。傳入 `nil` 會送出 JSON `null`，建立一張沒有 return URL 的帳單。在以 `reference_id` 重試時，若你需要確保是某個特定值，請明確傳入 `return_url`。
@@ -115,7 +114,7 @@ checkout_url = "https://pay.invoq.money/#{invoice_id}"
 invoice = invoq.invoices.get("inv_123")
 ```
 
-`invoices.get` 回傳託管結帳頁使用的公開帳單結構。它包含 `amount_paid`、`amount_due`、`amount_overpaid`、`payment_status`、`project`、`deposit_address`、`monitoring_ends_at`、`monitoring_status`、`transfers` 和 `direct_onchain_rails` 等欄位，但不包含 `reference_id`。如果需要你的商家端 `reference_id`，請使用建立帳單的回應或 `invoice.paid` webhook。
+`invoices.get` 回傳託管結帳頁使用的公開帳單結構：即建立回應的結構，加上 `amount_paid`、`project` 和 `transfers`，去掉 `reference_id`。如果需要商家端的 `reference_id`，請使用建立帳單的回應或 `invoice.paid` webhook。
 
 建立一筆測試付款：
 
@@ -133,7 +132,7 @@ paid_invoice = invoq.invoices.create_test_payment(
 
 `reference_id` 對測試付款而言是選填。沒有值時就直接省略，不要傳入 `nil`。
 
-要在本機收 webhook，用 ngrok、cloudflared 之類的 HTTPS 隧道把本地伺服器公開出去，再把隧道網址存成商家後台裡的測試 webhook URL。後台也能送出一條帶簽章的 `webhook.ping`，幫你確認連線。
+要在本機收 webhook，用 ngrok、cloudflared 之類的 HTTPS 隧道把本地伺服器公開出去，再把隧道網址存成商家後台裡的測試 webhook URL。
 
 每個 invoice 方法都會直接把回應的 `data` 物件以 Ruby hash 的形式回傳。
 
@@ -149,11 +148,17 @@ https://pay.invoq.money/<invoice id>
 
 ## 輸入與回應
 
-在送出請求前，SDK 會檢查 `amount` 的值與 `invoice_id` 參數是否為非空字串。invoq API 則會驗證金額的格式、範圍與幣別。
+在送出請求前，SDK 會檢查 `amount` 的值與 `invoice_id` 參數是否為非空字串。invoq API 則會驗證金額的格式與範圍。
 
-沒有要設定的選填欄位，就別放進請求的 hash 裡。當你要帶入 `description` 或 `reference_id` 時，請傳入字串。`return_url` 可以是字串或 `nil`。
+沒有要設定的選填欄位，就別放進請求的 hash 裡。當你要帶入 `description` 或 `reference_id` 時，請傳入字串。`return_url` 可以是字串或 `nil`。 hash 裡的其他鍵會被丟掉而不會送出，因為 API 會拒絕未知的請求內容欄位。
 
-回應裡的金額一律格式化為 4 位小數：用 `"129"` 建立，帳單會回傳 `amount: "129.0000"`。比較金額請按數值比，不要按字串比。`amount_due` 依 `max(amount - amount_paid, 0)` 衍生，使用和 `amount_paid` 相同的 18 位小數 scale；`amount_overpaid` 與它互為鏡像，即 `max(amount_paid - amount, 0)`，所以你不必自己做減法。`monitoring_status` 取值 `"active"` 或 `"ended"`——一旦變為 `"ended"`，收款位址就不再被監控——而 `transfers` 是已確認的鏈上收款紀錄（每一項都含 `tx_hash`、`amount` 和 `explorer_tx_url`）。測試帳單裡兩者分別為 `nil` / `[]`。
+回應裡的金額一律格式化為 4 位小數：用 `"129"` 建立，帳單會回傳 `amount: "129.0000"`。比較金額請按數值比，不要按字串比。`amount_due` 依 `max(amount - amount_paid, 0)` 衍生，使用和 `amount_paid` 相同的 18 位小數 scale；`amount_overpaid` 與它互為鏡像，即 `max(amount_paid - amount, 0)`，所以你不必自己做減法。
+
+帳單有兩個狀態欄位。`status` 是記帳狀態——`unpaid`、`partially_paid`、`paid`、`settling`、`settled`、`review_required`，其中三個等同已付款的取值只差在資金離你的錢包還有多遠。`checkout_status` 是付款人看到的狀態——`open`、`confirming`、`expired`、`paid`、`unavailable`——它從不構成履約依據。`payment_revision` 是一個非負整數，每當已確認的付款集合改變就加一，你可以據此丟掉比手上更舊的快照。
+
+`payment_options` 裝的是付款指示，建立時即固定，測試模式下為 `[]`。每一項先看 `status`，再看 `collection_method`：只有 `"ready"` 可付，`"evm_deposit"` 帶 `deposit_address` 和 `suggested_amount`，`"direct_exact"` 帶 `recipient_address` 以及買家必須一位不差轉出的 `exact_amount`。`transfers` 是已確認的收款紀錄——`transaction_id`、`event_index`、`amount`、`explorer_transaction_url`——在有付款確認前一直是 `[]`。完整欄位說明見 [REST API 文件](https://github.com/invoqmoney/api)。
+
+請用 `chain_namespace`、`chain_reference` 和 `token_address` 來辨識一個付款方式，不要用它在陣列裡的位置。`monitoring_ends_at` 是付款視窗的結束時間，測試帳單裡為 `nil`。
 
 ## Webhook
 
@@ -184,6 +189,11 @@ def handle_invoq_webhook(env)
     fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
 
     # 以冪等方式履約 fulfillment_key 對應的訂單。
+  elsif Invoq.invoice_payment_reversed?(event)
+    invoice = event.fetch("data").fetch("invoice")
+    fulfillment_key = invoice["reference_id"] || invoice.fetch("id")
+
+    # 暫停或撤銷 fulfillment_key 對應的訂單。
   end
 
   [
@@ -198,6 +208,8 @@ end
 
 當 `Invoq.invoice_paid?(event)` 為 true 時，表示帳單已可自動履約；用帳單的 `reference_id` 或你存下來的帳單 `id`，找到並履約對應的訂單。`review_required` 帳單暫時還不會發出 `invoice.paid` webhook。如果結帳回報 `review_required`，請顯示待審核狀態，並等審核通過後、稍後送達的 `invoice.paid` webhook 再處理。
 
+帳單從已付款跌回不足額時，invoq 還會發 `invoice.payment_reversed`——例如鏈重組把一筆已確認的轉帳拿掉了。用 `Invoq.invoice_payment_reversed?(event)` 接住它，再依你自己的策略暫停或撤銷履約。
+
 重要事項：
 
 - 傳入你的 Ruby 框架所收到、原封不動的原始請求內容字串。
@@ -205,9 +217,10 @@ end
 - `verify_webhook` 不需要 `Invoq.new(...)`，也不需要你的 invoq API 私密金鑰。
 - 請使用你的 webhook 簽章金鑰（`whsec_...`），而不是 `INVOQ_SECRET_KEY`。
 - 履約要做到冪等。webhook 重送時，同一個事件可能會送達不止一次。
-- 盡快回 2xx。任何其他狀態碼都算投遞失敗：逾時、`429`、`5xx` 這類暫時性失敗會重試，其他 `4xx` 則不會。
+- 盡快回 2xx。任何其他狀態碼都算投遞失敗並會重試，重新導向和 `4xx` 也在其中，所以一次發版視窗或暫時走錯的路由會被重試，而不是直接丟棄。間隔依序為 1 分鐘、5 分鐘、30 分鐘、2 小時，總共最多 5 次。
+- 送達順序不保證。請保留 `payment_revision` 最大的那份快照。
 
-`Invoq.invoice_paid?` 接受可履約的 `invoice.paid` 事件——帳單狀態為 `paid`、`settling` 或 `settled`；並拒絕 `review_required`。
+`Invoq.invoice_paid?` 接受可履約的 `invoice.paid` 事件——帳單狀態為 `paid`、`settling` 或 `settled`；並拒絕 `review_required`。 `Invoq.invoice_payment_reversed?` 接受 `invoice.payment_reversed` 事件，完全不檢查狀態：漏掉一次撤銷，就會讓訂單繼續掛在一筆已經不存在的付款上。本版 SDK 尚未建模的事件型別同樣能通過驗證，並原樣回傳。
 
 webhook 驗證失敗時會擲出 `Invoq::SignatureVerificationError`。SDK 允許時間戳有 5 分鐘的容差。簽章標頭格式為：
 
@@ -219,7 +232,7 @@ invoq-signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">
 
 ```ruby
 begin
-  invoq.invoices.create(amount: "0.001", currency: "USD")
+  invoq.invoices.create(amount: "0.001")
 rescue Invoq::ApiError => error
   warn error.status
   warn error.code
