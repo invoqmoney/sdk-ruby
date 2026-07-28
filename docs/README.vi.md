@@ -1,12 +1,18 @@
 # invoq Ruby SDK
 
-[English](../README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · **Tiếng Việt** · [Türkçe](./README.tr.md) · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
+[English](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · **Tiếng Việt** · [Türkçe](./README.tr.md) · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
 
-> Tài liệu này được dịch từ README tiếng Anh; nếu có chỗ khác nhau, [bản tiếng Anh](../README.md) là bản chuẩn.
+> Tài liệu này được dịch từ README tiếng Anh; nếu có chỗ khác nhau, [bản tiếng Anh](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) là bản chuẩn.
 
 Nhận thanh toán stablecoin bằng invoq từ mã máy chủ Ruby. SDK này bọc các API máy chủ của invoq và xác minh các webhook có chữ ký.
 
 Chỉ dùng gem này trên máy chủ của bạn. Nó xử lý các khóa bí mật và không nên bị đóng gói vào mã trình duyệt.
+
+**Đang code bằng AI? Dán câu này.**
+
+```
+Thêm thanh toán stablecoin vào dự án của tôi bằng invoq. Bắt đầu ở chế độ thử nghiệm. Đọc tài liệu trước khi viết code: https://invoq.money/llms.txt
+```
 
 ## SDK server
 

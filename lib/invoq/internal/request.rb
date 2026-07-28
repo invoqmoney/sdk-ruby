@@ -51,6 +51,15 @@ module Invoq
           )
         end
 
+        # A non-Hash data is a broken envelope; returning it defers the failure
+        # to the caller's first read.
+        unless payload["data"].is_a?(Hash)
+          raise Error.new(
+            "invoq API response data envelope was not an object.",
+            payload: payload
+          )
+        end
+
         payload["data"]
       rescue JSON::GeneratorError
         raise Error, "Failed to encode invoq API request."
@@ -116,8 +125,11 @@ module Invoq
         fields = value.each_with_object([]) do |field, result|
           next unless field.is_a?(Hash)
 
+          # A location this version does not know is passed through, not
+          # dropped: the caller is already on an error path and needs the code
+          # and message. Only a structurally invalid entry is discarded.
           location = field["location"]
-          next unless %w[query path body header].include?(location)
+          next unless location.is_a?(String)
           next unless field["field"].is_a?(String)
           next unless field["code"].is_a?(String)
           next unless field["message"].is_a?(String)

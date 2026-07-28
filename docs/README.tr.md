@@ -1,12 +1,18 @@
 # invoq Ruby SDK'sı
 
-[English](../README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · **Türkçe** · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
+[English](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · **Türkçe** · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
 
-> Bu belge İngilizce README'nin çevirisidir; bir fark olursa [İngilizce sürüm](../README.md) esas alınır.
+> Bu belge İngilizce README'nin çevirisidir; bir fark olursa [İngilizce sürüm](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) esas alınır.
 
 Ruby sunucu kodunuzdan invoq ile stablecoin ödemeleri kabul edin. Bu SDK, invoq sunucu API'lerini sarmalar ve imzalı webhook'ları doğrular.
 
 Bu gem'i yalnızca sunucunuzda kullanın. Gizli anahtarları işler ve tarayıcı koduna dahil edilmemelidir.
+
+**AI ile mi kod yazıyorsunuz? Bunu yapıştırın.**
+
+```
+invoq ile projeme stablecoin ödemesi ekle. Test modunda başla. Kod yazmadan önce belgeleri oku: https://invoq.money/llms.txt
+```
 
 ## Sunucu SDK'ları
 

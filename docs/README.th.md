@@ -1,12 +1,18 @@
 # invoq Ruby SDK
 
-[English](../README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Türkçe](./README.tr.md) · **ไทย** · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
+[English](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Türkçe](./README.tr.md) · **ไทย** · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
 
-> เอกสารนี้แปลจาก README ภาษาอังกฤษ หากมีข้อความไม่ตรงกัน ให้ยึด[ฉบับภาษาอังกฤษ](../README.md)เป็นหลัก
+> เอกสารนี้แปลจาก README ภาษาอังกฤษ หากมีข้อความไม่ตรงกัน ให้ยึด[ฉบับภาษาอังกฤษ](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md)เป็นหลัก
 
 รับชำระเงินด้วย stablecoin ผ่าน invoq ได้จากโค้ดเซิร์ฟเวอร์ Ruby ของคุณ SDK นี้ห่อหุ้ม API ฝั่งเซิร์ฟเวอร์ของ invoq เอาไว้ และตรวจสอบ webhook ที่มีลายเซ็นกำกับให้
 
 ใช้ gem นี้บนเซิร์ฟเวอร์ของคุณเท่านั้น เพราะ gem นี้จัดการกับคีย์ลับ จึงไม่ควรนำไปรวมไว้ในโค้ดฝั่งเบราว์เซอร์
+
+**ใช้ AI เขียนโค้ดอยู่ไหม วางข้อความนี้**
+
+```
+เพิ่มการรับชำระด้วย stablecoin เข้าโปรเจกต์ของฉันด้วย invoq เริ่มที่โหมดทดสอบ อ่านเอกสารก่อนเขียนโค้ด: https://invoq.money/llms.txt
+```
 
 ## SDK ฝั่งเซิร์ฟเวอร์
 

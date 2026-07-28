@@ -1,12 +1,18 @@
 # invoq Ruby SDK
 
-[English](../README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Türkçe](./README.tr.md) · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · **繁體中文**
+[English](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · [Français](./README.fr.md) · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Türkçe](./README.tr.md) · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · **繁體中文**
 
-> 本文是英文版 README 的繁體中文翻譯；若表述有出入，以[英文版](../README.md)為準。
+> 本文是英文版 README 的繁體中文翻譯；若表述有出入，以[英文版](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md)為準。
 
 在你的 Ruby 伺服器端程式碼裡，用 invoq 接收穩定幣付款。這個 SDK 封裝了 invoq 的伺服器 API，並會驗證帶簽章的 webhook。
 
 這個 gem 只能用在你自己的伺服器上。它會處理私密金鑰，不應被打包進瀏覽器端程式碼。
+
+**在用 AI 寫程式？把這段貼給它。**
+
+```
+用 invoq 幫我的專案串接穩定幣收款，從測試模式開始。寫程式前先讀文件 https://invoq.money/llms.txt
+```
 
 ## 伺服器端 SDK
 

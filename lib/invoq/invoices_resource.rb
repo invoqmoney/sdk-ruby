@@ -24,7 +24,7 @@ module Invoq
     end
 
     def get(invoice_id)
-      id = encode_path_segment(required_request_string(invoice_id, "invoice_id"))
+      id = encode_path_segment(required_path_segment(invoice_id, "invoice_id"))
 
       Internal::Request.json(
         api_key: @api_key,
@@ -36,7 +36,7 @@ module Invoq
     end
 
     def create_test_payment(invoice_id, input)
-      id = encode_path_segment(required_request_string(invoice_id, "invoice_id"))
+      id = encode_path_segment(required_path_segment(invoice_id, "invoice_id"))
 
       Internal::Request.json(
         api_key: @api_key,
@@ -106,6 +106,18 @@ module Invoq
       end
 
       value
+    end
+
+    # A URL resolver pops "." and "..", so an id of either would call a
+    # different endpoint instead of 404ing. Percent-encoding is no help.
+    def required_path_segment(value, field)
+      segment = required_request_string(value, field)
+
+      if segment == "." || segment == ".."
+        raise Error, "#{field} must not be a path segment that resolves ('.' or '..')."
+      end
+
+      segment
     end
 
     def required_request_string(value, field)

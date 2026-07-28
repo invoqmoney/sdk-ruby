@@ -1,12 +1,18 @@
 # SDK Ruby invoq
 
-[English](../README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · **Français** · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Türkçe](./README.tr.md) · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
+[English](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) · [Bahasa Indonesia](./README.id.md) · [Español](./README.es-419.md) · **Français** · [Português](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Türkçe](./README.tr.md) · [ไทย](./README.th.md) · [简体中文](./README.zh-Hans.md) · [繁體中文](./README.zh-Hant.md)
 
-> Ce document est une traduction du README anglais ; en cas de divergence, la [version anglaise](../README.md) fait foi.
+> Ce document est une traduction du README anglais ; en cas de divergence, la [version anglaise](https://github.com/invoqmoney/sdk-ruby/blob/main/README.md) fait foi.
 
 Acceptez des paiements en stablecoins avec invoq depuis du code serveur Ruby. Ce SDK encapsule les API serveur d’invoq et vérifie les webhooks signés.
 
 N’utilisez cette gem que sur votre serveur. Elle gère des clés secrètes et ne doit pas être incluse dans le code du navigateur.
+
+**Vous codez avec une IA ? Collez ceci.**
+
+```
+Ajoute les paiements en stablecoins à mon projet avec invoq. Commence en mode test. Lis la documentation avant de coder : https://invoq.money/llms.txt
+```
 
 ## SDK serveur
 

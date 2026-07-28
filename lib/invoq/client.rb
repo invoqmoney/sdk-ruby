@@ -18,6 +18,12 @@ module Invoq
         raise Error, "invoq API key must be a non-empty string."
       end
 
+      # A control character in a key is either rejected deep in the transport or
+      # silently sent; reject it here so every SDK answers the same way.
+      if api_key.match?(/[\x00-\x1F\x7F]/)
+        raise Error, "invoq API key must not contain control characters."
+      end
+
       @api_key = api_key
       @api_origin = Invoq.normalize_api_origin(api_origin)
       @timeout_ms = Invoq.normalize_timeout_ms(timeout_ms)

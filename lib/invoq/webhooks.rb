@@ -113,7 +113,8 @@ module Invoq
     def self.parse_signature_header(signature_header)
       parts = {}
 
-      signature_header.split(",").each do |part|
+      # -1 keeps trailing empty fields, so a trailing comma reaches the check below.
+      signature_header.split(",", -1).each do |part|
         separator_index = part.index("=")
 
         unless separator_index
@@ -171,7 +172,7 @@ module Invoq
     def self.hmac_sha256_hex(secret, timestamp, raw_body)
       OpenSSL::HMAC.hexdigest(
         "SHA256",
-        secret.encode("UTF-8"),
+        secret.b,
         "#{timestamp}.".b + body_bytes(raw_body)
       )
     end

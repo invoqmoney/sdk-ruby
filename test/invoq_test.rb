@@ -476,6 +476,61 @@ class InvoqTest < Minitest::Test
     assert_raises(Invoq::Error) { client.invoices.create_test_payment("inv_test_123", amount: "  ") }
   end
 
+  def test_rejects_an_api_key_with_control_characters
+    ["sk_test_x\r\nX-Injected: yes", "sk_test_x\n", "sk_test\u0000x"].each do |key|
+      error = assert_raises(Invoq::Error) { Invoq.new(key) }
+      assert_includes error.message, "control characters"
+    end
+  end
+
+  def test_rejects_a_trailing_comma_in_the_signature_header
+    error = assert_raises(Invoq::SignatureVerificationError) do
+      Invoq::Webhooks.verify_webhook(
+        "{}",
+        { "invoq-signature" => "t=#{Time.now.to_i},v1=#{"a" * 64}," },
+        "whsec_test"
+      )
+    end
+
+    assert_equal "invalid_signature_header", error.code
+  end
+
+  def test_keys_the_hmac_on_the_secrets_raw_bytes
+    body = "{\"type\":\"invoice.paid\"}"
+    secret = "whsec_caf\xE9".dup.force_encoding("ISO-8859-1")
+    timestamp = Time.now.to_i
+    expected = OpenSSL::HMAC.hexdigest("SHA256", secret.b, "#{timestamp}.#{body}")
+
+    event = Invoq::Webhooks.verify_webhook(
+      body,
+      { "invoq-signature" => "t=#{timestamp},v1=#{expected}" },
+      secret
+    )
+
+    assert_equal "invoice.paid", event["type"]
+  end
+
+  def test_rejects_a_non_object_data_envelope
+    ["null", "5", "[]", "\"x\""].each do |body|
+      error = assert_raises(Invoq::Error) do
+        stub_http(FakeResponse.new("200", "{\"data\":#{body}}")) do
+          Invoq.new("sk_test_123").invoices.create("amount" => "1")
+        end
+      end
+
+      assert_includes error.message, "data envelope was not an object"
+    end
+  end
+
+  def test_rejects_a_dot_segment_invoice_id
+    client = Invoq.new("sk_test_123")
+
+    [".", ".."].each do |id|
+      assert_raises(Invoq::Error) { client.invoices.get(id) }
+      assert_raises(Invoq::Error) { client.invoices.create_test_payment(id, "amount" => "1") }
+    end
+  end
+
   def test_maps_api_error_envelopes_to_invoq_api_error
     payload = {
       "code" => "invalid_request",
@@ -486,7 +541,14 @@ class InvoqTest < Minitest::Test
           "field" => "amount",
           "code" => "required",
           "message" => "Required."
-        }
+        },
+        {
+          "location" => "unexpected",
+          "field" => "currency",
+          "code" => "unknown_field",
+          "message" => "Unknown field."
+        },
+        { "location" => "body", "field" => "description", "message" => "No code." }
       ],
       "meta" => { "request_id" => "req_test" }
     }
@@ -499,7 +561,7 @@ class InvoqTest < Minitest::Test
 
     assert_equal 400, error.status
     assert_equal "invalid_request", error.code
-    assert_equal payload["fields"], error.fields
+    assert_equal payload["fields"].first(2), error.fields
     assert_equal({ "request_id" => "req_test" }, error.meta)
   end
 
